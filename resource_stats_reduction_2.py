@@ -49,15 +49,60 @@ class StatBunches(object):
     def __init__(self, file_path):
         pass
 
+class StatsIterator(object):
+    
+    def __init__(self, stats_list, item_name):
+        self.stats_list = stats_list
+        self.item_name = item_name
+        self.pre_stat = None
+        self.current_stat = self.stats_list[0]
+        self.index = 0
+    
+    def __iter__(self):
+        return self
+    
+    def next(self):
+        if self.index >= len(self.stats_list):
+            raise StopIteration()
+        if self.item_name == 'overall_cpu_usage_percentages':
+            if self.pre_stat is None:
+                self.__shiftStatByOne()
+                self.next()
+            else:
+                percentage = self.__calculateCpuUsagePercentage(self.pre_stat.overall_data,
+                                                                self.current_stat.overall_data)
+                self.__shiftStatByOne()
+                return percentage
+        else:
+            raise StopIteration()
+    
+    def __shiftStatByOne(self):
+        self.pre_stat = self.current_stat
+        self.index += 1
+        if self.index >= len(self.stats_list): 
+            self.current_stat = None
+        else:
+            self.current_stat = self.stats_list[self.index]
+        
+    def __calculateCpuUsagePercentage(self, previous, current):
+        running_delta = current['running'] - previous['running']
+        total_delta = current['total'] - previous['total']
+        print (running_delta)
+        print (total_delta)
+        percentage = float(running_delta) / total_delta
+        return percentage
+            
+        
 class CpuStatBunches(StatBunches):
 
     def __init__(self, file_path):
-        self.__cpu_stat_bunches = []
+
         self.__file_path = file_path
         self.__start_regexp = re.compile('---- /proc/schedstat')
         self.__end_regexp = re.compile('---- ')
 
     def parseLogFile(self):
+        self.__cpu_stat_bunches = []
         with open(self.__file_path, 'r') as f:
             start = False
             pre_cpu_stat_bunch = None
@@ -76,18 +121,32 @@ class CpuStatBunches(StatBunches):
     
     def getCpuStatBunches(self):
         return self.__cpu_stat_bunches
-    
-    def getOverallCpuUsagePercentages(self):
-        for i in xrange(1, len(self.__cpu_stat_bunches)):
-            current = self.__cpu_stat_bunches[i]
-            previous = self.__cpu_stat_bunches[i-1]
-            running_delta = current.overall_data['running'] - \
-                            previous.overall_data['running']
-            total_delta = current.overall_data['total'] - \
-                          previous.overall_data['total']
-            percentage = float(running_delta) / total_delta
-            yield percentage
-    
+
+def parseLogFile(file_path):
+    schedstat_start_regexp = re.compile('---- /proc/schedstat')
+    meminfo_start_regexp = re.compile('---- /proc/meminfo')
+    end_regexp = re.compile('---- ')
+    cpu_stats = []
+    with open(file_path, 'r') as f:
+        schedstat_start = False
+        meminfo_start = False
+        current_cpu_stat_bunch = CpuStatBunch()
+        for line in f:
+            if schedstat_start_regexp.search(line):
+                schedstat_start = True
+            elif meminfo_start_regexp.search(line):
+                schedstat_start = False
+                cpu_stats.append(current_cpu_stat_bunch)
+                current_cpu_stat_bunch = CpuStatBunch()
+                meminfo_start = True
+                schedstat_start = False
+                # TODO: Initialize memStat_bunch
+            elif end_regexp.search(line):
+                # TODO: Add memStat_bunch to list
+                meminfo_start = False
+            elif schedstat_start:
+                current_cpu_stat_bunch.parseText(line)
+    return cpu_stats
     
 
 class MemStatBunches(StatBunches):
@@ -109,7 +168,7 @@ class CpuStatBunch(StatBunch):
         if text.startswith('cpu'):
             items = text.split()
             cpu_id = items[0]
-            if cpu_id not in self.data: self.data[cpu_id] = {}
+            if cpu_id not in self.percpu_data: self.percpu_data[cpu_id] = {}
             (self.percpu_data[cpu_id])['running'] = int(items[7])
             (self.percpu_data[cpu_id])['waiting'] = int(items[8])
             (self.percpu_data[cpu_id])['total'] = (self.percpu_data[cpu_id])['running'] + \
@@ -117,13 +176,9 @@ class CpuStatBunch(StatBunch):
             self.overall_data['running'] += (self.percpu_data[cpu_id])['running']
             self.overall_data['waiting'] += (self.percpu_data[cpu_id])['waiting']
             self.overall_data['total'] += (self.percpu_data[cpu_id])['total']
-
-    def calculage_cpu_usage(self, pre_cpu_stat_bunch):
-        self.overall_data['total_delta'] = self.overall_data['total'] - pre_cpu_stat_bunch['total']
-        self.overall_data
-        for cpu_id in self.percpu_data:
-            (self.percpu_data[cpu_id])['total_delta'] = (self.percpu_data[cpu_id])['total'] - \
-                                                  (pre_cpu_stat_bunch[cpu_id])['total']
+            print (text)
+            print (self.overall_data['running'])
+            print (self.overall_data['total'])
 
 class MemStatBunch(StatBunch):
     pass
@@ -142,6 +197,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=script_description)
     parser.add_argument('input_file', type=str, help='input log file')
     args = parser.parse_args()
-    resource_usage_stats = ResourceUsageStats()
-    resource_usage_stats.parseLogFile(args.input_file)
-    resource_usage_stats.getSummary()
+    cpu_stats_list = parseLogFile(args.input_file)
+    cpu_percentages = StatsIterator(cpu_stats_list, 'overall_cpu_usage_percentages')
+    for percentage in cpu_percentages:
+        print (percentage)
