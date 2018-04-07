@@ -14,13 +14,12 @@ $ ./resource_stats_reduction.py resource_stats_01.txt | tee reduced_stats_output
 
 Command to collect raw data from system file:
 
-adb shell 'getprop ro.build.version.release; \
-while :; do echo -------- $(date -u) --------; \
-echo ---- /pid/stat; \
-cat /proc/$(ps | grep com.usens | tr -s " " | cut -d " " -f 2)/stat; echo ---- top; top -d 3 -n 1 -m 10; \
+adb shell "while :; do echo -------- \`date -u\` --------; \
+echo ---- /proc/schedstat; cat /proc/schedstat; \
 echo ---- /proc/meminfo; cat /proc/meminfo; \
-echo ---- /proc/stat; cat /proc/stat; \
-sleep 3; done' | tee resource_stats_01.txt
+echo ---- /proc/stat; \
+cat /proc/stat; echo ---- top; \
+top -n 1; sleep 3; done" > resource_stats_~~~~
 
 """
 from __future__ import print_function
@@ -29,512 +28,346 @@ from __future__ import division
 
 import re
 import argparse
+from datetime import datetime
 
 
+class ResourceUsageStats(object):
 
-#RECORD_START_PATTERN = '-------- [a-zA-Z]{3,} [a-zA-Z]{3,} [0-9]{1,2} [0-9]{2,}:[0-9]{2,}:[0-9]{2,} GMT [0-9]{4,} --------'
-RECORD_START_PATTERN = 'Fri'
-PROCESS_CPU_STAT_PATTERN = '[0-9]+ \(.+\) [A-Z]'
-
-
-class CpuInfo(object):
-    """
-      Calculate cpu usage depends on CpuData collected
-    """
-
-    def __init__(self):
-        self.cpu_data_list = []
-
-    def recevieNewData(self, cpu_data):
-        if cpu_data.cpu_raw_values:
-            self.cpu_data_list.append(cpu_data)
+    def __init__(self, cpu_stats_list, mem_stats_list):
+        self.cpu_stats_list = cpu_stats_list
+        self.mem_stats_list = mem_stats_list
 
     def getSummary(self):
-        res = ''
+        res = '-------- Cpu statistics --------\n'
 
-        res += 'Overall CPU - user + sys + IRQ min: {0:.1f}%\n'.format(self.overallCpuUsageUserSysIrqMin() * 100)
-        res += 'Overall CPU - user + sys + IRQ avg: {0:.1f}%\n'.format(self.overallCpuUsageUserSysIrqAvg() * 100)
-        res += 'Overall CPU - user + sys + IRQ max: {0:.1f}%\n'.format(self.overallCpuUsageUserSysIrqMax() * 100)
+        res += 'Overall CPU - user + sys min: {0:.1f}%\n'.format(min(CpuStats(self.cpu_stats_list, 'overall user + system')))
+        res += 'Overall CPU - user + sys avg: {0:.1f}%\n'.format(sum(CpuStats(self.cpu_stats_list, 'overall user + system')) / \
+                                                          (len(self.cpu_stats_list) - 1))
+        res += 'Overall CPU - user + sys max: {0:.1f}%\n'.format(max(CpuStats(self.cpu_stats_list, 'overall user + system')))
+        res += 'Peak Valley Delta: {0:.1f}%\n'.format(max(CpuStats(self.cpu_stats_list, 'overall user + system')) -  \
+                                                      min(CpuStats(self.cpu_stats_list, 'overall user + system')))
+
+        res += 'Overall CPU - user min: {0:.1f}%\n'.format(min(CpuStats(self.cpu_stats_list, 'overall user')))
+        res += 'Overall CPU - user avg: {0:.1f}%\n'.format(sum(CpuStats(self.cpu_stats_list, 'overall user')) / \
+                                                          (len(self.cpu_stats_list) - 1))
+        res += 'Overall CPU - user max: {0:.1f}%\n'.format(max(CpuStats(self.cpu_stats_list, 'overall user')))
+
+        res += 'Overall CPU - sys min: {0:.1f}%\n'.format(min(CpuStats(self.cpu_stats_list, 'overall system')))
+        res += 'Overall CPU - sys avg: {0:.1f}%\n'.format(sum(CpuStats(self.cpu_stats_list, 'overall system')) / \
+                                                          (len(self.cpu_stats_list) - 1))
+        res += 'Overall CPU - sys max: {0:.1f}%\n'.format(max(CpuStats(self.cpu_stats_list, 'overall system')))
+
+        res += 'Per CPU - user + sys min: {0:.1f}%\n'.format(min(CpuStats(self.cpu_stats_list, 'per CPU user + system')))
+        res += 'Per CPU - user + sys avg: {0:.1f}%\n'.format(sum(CpuStats(self.cpu_stats_list, 'per CPU user + system')) / \
+                                                             ((len(self.cpu_stats_list) - 1) * self.cpu_stats_list[0].getCoreCount()))
+        res += 'Per CPU - user + sys max: {0:.1f}%\n'.format(max(CpuStats(self.cpu_stats_list, 'per CPU user + system')))
+
+        res += 'Per CPU - user min: {0:.1f}%\n'.format(min(CpuStats(self.cpu_stats_list, 'per CPU user')))
+        res += 'Per CPU - user avg: {0:.1f}%\n'.format(sum(CpuStats(self.cpu_stats_list, 'per CPU user')) / \
+                                                       ((len(self.cpu_stats_list) - 1) * self.cpu_stats_list[0].getCoreCount()))
+        res += 'Per CPU - user max: {0:.1f}%\n'.format(max(CpuStats(self.cpu_stats_list, 'per CPU user')))
+
+        res += 'Per CPU - sys min: {0:.1f}%\n'.format(min(CpuStats(self.cpu_stats_list, 'per CPU system')))
+        res += 'Per CPU - sys avg: {0:.1f}%\n'.format(sum(CpuStats(self.cpu_stats_list, 'per CPU system')) / \
+                                                      ((len(self.cpu_stats_list) - 1) * self.cpu_stats_list[0].getCoreCount()))
+        res += 'Per CPU - sys max: {0:.1f}%\n'.format(max(CpuStats(self.cpu_stats_list, 'per CPU system')))
+
+        res += 'IO min: {0:.1f}%\n'.format(min(CpuStats(self.cpu_stats_list, 'io')))
+        res += 'IO avg: {0:.1f}%\n'.format(sum(CpuStats(self.cpu_stats_list, 'io')) / \
+                                          (len(self.cpu_stats_list) - 1))
+        res += 'IO max: {0:.1f}%\n'.format(max(CpuStats(self.cpu_stats_list, 'io')))
         
-        res += 'Overall CPU - user min: {0:.1f}%\n'.format(self.overallCpuUsageUserMin() * 100)
-        res += 'Overall CPU - user avg: {0:.1f}%\n'.format(self.overallCpuUsageUserAvg() * 100)
-        res += 'Overall CPU - user max: {0:.1f}%\n'.format(self.overallCpuUsageUserMax() * 100)
-    
-        res += 'Overall CPU - sys + IRQ min: {0:.1f}%\n'.format(self.overallCpuUsageSysIrqMin() * 100)
-        res += 'Overall CPU - sys + IRQ avg: {0:.1f}%\n'.format(self.overallCpuUsageSysIrqAvg() * 100)
-        res += 'Overall CPU - sys + IRQ max: {0:.1f}%\n'.format(self.overallCpuUsageSysIrqMax() * 100)
-    
-        res += 'Per CPU - user + sys + IRQ min: {0:.1f}%\n'.format(self.perCoreCpuUsageUserSysIrqMin() * 100)
-        res += 'Per CPU - user + sys + IRQ max: {0:.1f}%\n'.format(self.perCoreCpuUsageUserSysIrqMax() * 100)
-    
-        res += 'Per CPU - user min: {0:.1f}%\n'.format(self.perCoreCpuUsageUserMin() * 100)
-        res += 'Per CPU - user max: {0:.1f}%\n'.format(self.perCoreCpuUsageUserMax() * 100)
-    
-        res += 'Per CPU - sys + IRQ min: {0:.1f}%\n'.format(self.perCoreCpuUsageSysIrqMin() * 100)
-        res += 'Per CPU - sys + IRQ max: {0:.1f}%\n'.format(self.perCoreCpuUsageSysIrqMax() * 100)
-        
-        res += 'I/O min: {0:.1f}%\n'.format(self.ioMax() * 100)
-        res += 'I/O avg: {0:.1f}%\n'.format(self.ioMax() * 100)
-        res += 'I/O max: {0:.1f}%\n'.format(self.ioMax() * 100)
-        
-        res += 'APP process cpu usage min: {0:.1f}%\n'.format(self.appProcessUsageMin() * 100)
-        res += 'APP process cpu usage avg: {0:.1f}%\n'.format(self.appProcessUsageAvg() * 100)
-        res += 'APP process cpu usage max: {0:.1f}%\n'.format(self.appProcessUsageMax() * 100)
-    
+        res += '-------- Memory statistics --------\n'
+
+        res += 'Memory in use (MiB) min: {0:.1f}\n'.format(min(MemStats(self.mem_stats_list, 'MemUsed')) / 1024)
+        res += 'Memory in use (MiB) avg: {0:.1f}\n'.format((sum(MemStats(self.mem_stats_list, 'MemUsed')) / 1024) /
+                                                     len(self.mem_stats_list))
+        res += 'Memory in use (MiB) max: {0:.1f}\n'.format(max(MemStats(self.mem_stats_list, 'MemUsed')) / 1024)
+
+        res += 'Peak Valley Delta (MiB): {0:.1f}\n'.format((max(MemStats(self.mem_stats_list, 'MemUsed')) - \
+                                                         min(MemStats(self.mem_stats_list, 'MemUsed')))  / 1024)
+        res += 'After Before Delta (MiB): {0:.1f}'.format((self.mem_stats_list[0].getMemUsed() - \
+                                                          self.mem_stats_list[-1].getMemUsed()) / 1024)
         return res
 
-    def appProcessUsageMax(self):
-        if len(self.__calculateAppProcessUsage()) <= 0: return -1
-        return max(self.__calculateAppProcessUsage())
-    
-    def appProcessUsageMin(self):
-        if len(self.__calculateAppProcessUsage()) <= 0: return -1
-        return min(self.__calculateAppProcessUsage())
-    
-    def appProcessUsageAvg(self):
-        if len(self.__calculateAppProcessUsage()) <= 0: return -1
-        return sum(self.__calculateAppProcessUsage()) / (len(self.__calculateAppProcessUsage()))
 
-    def overallCpuUsageUserSysIrqMax(self):
-        if (len(self.cpu_data_list) - 1) <= 0: return -1
-        return max(self.__calculateOverallCpuUsageUserSysIrq())
-    
-    def overallCpuUsageUserSysIrqMin(self):
-        if (len(self.cpu_data_list) - 1) <= 0: return -1
-        return min(self.__calculateOverallCpuUsageUserSysIrq())
-    
-    def overallCpuUsageUserSysIrqAvg(self):
-        if (len(self.cpu_data_list) - 1) <= 0: return -1
-        return sum(self.__calculateOverallCpuUsageUserSysIrq()) / (len(self.cpu_data_list) - 1)
-    
-    def overallCpuUsageUserMax(self):
-        if (len(self.cpu_data_list) - 1) <= 0: return -1
-        return max(self.__calculateOverallCpuUsageUser())
-    
-    def overallCpuUsageUserMin(self):
-        if (len(self.cpu_data_list) - 1) <= 0: return -1
-        return min(self.__calculateOverallCpuUsageUser())
-    
-    def overallCpuUsageUserAvg(self):
-        if (len(self.cpu_data_list) - 1) <= 0: return -1
-        return sum(self.__calculateOverallCpuUsageUser()) / (len(self.cpu_data_list) - 1)
-    
-    def overallCpuUsageSysIrqMax(self):
-        if (len(self.cpu_data_list) - 1) <= 0: return -1
-        return max(self.__calculateOverallCpuUsageSysIrq())
-    
-    def overallCpuUsageSysIrqMin(self):
-        if (len(self.cpu_data_list) - 1) <= 0: return -1
-        return min(self.__calculateOverallCpuUsageSysIrq())
-    
-    def overallCpuUsageSysIrqAvg(self):
-        if (len(self.cpu_data_list) - 1) <= 0: return -1
-        return sum(self.__calculateOverallCpuUsageSysIrq()) / (len(self.cpu_data_list) - 1)
-    
-    def perCoreCpuUsageUserSysIrqMax(self):
-        if (len(self.cpu_data_list) - 1) <= 0: return -1
-        return max(self.__calculatePerCoreUsageUserSysIrq())
-    
-    def perCoreCpuUsageUserSysIrqMin(self):
-        if (len(self.cpu_data_list) - 1) <= 0: return -1
-        return min(self.__calculatePerCoreUsageUserSysIrq())
-    
-    def perCoreCpuUsageUserSysIrqAvg(self):
-        if (len(self.cpu_data_list) - 1) <= 0: return -1
-        return sum(self.__calculatePerCoreUsageUserSysIrq()) / (len(self.cpu_data_list) - 1)
-    
-    def perCoreCpuUsageUserMax(self):
-        if (len(self.cpu_data_list) - 1) <= 0: return -1
-        return max(self.__calculatePerCoreUsageUser())
-    
-    def perCoreCpuUsageUserMin(self):
-        if (len(self.cpu_data_list) - 1) <= 0: return -1
-        return min(self.__calculatePerCoreUsageUser())
-    
-    def perCoreCpuUsageUserAvg(self):
-        if (len(self.cpu_data_list) - 1) <= 0: return -1
-        return sum(self.__calculatePerCoreUsageUser()) / (len(self.cpu_data_list) - 1)
-    
-    def perCoreCpuUsageSysIrqMax(self):
-        if (len(self.cpu_data_list) - 1) <= 0: return -1
-        return max(self.__calculatePerCoreUsageSysIrq())
-    
-    def perCoreCpuUsageSysIrqMin(self):
-        if (len(self.cpu_data_list) - 1) <= 0: return -1
-        return min(self.__calculatePerCoreUsageSysIrq())
-    
-    def perCoreCpuUsageSysIrqAvg(self):
-        if (len(self.cpu_data_list) - 1) <= 0: return -1
-        return sum(self.__calculatePerCoreUsageSysIrq()) / (len(self.cpu_data_list) - 1)
-    
-    def ioMax(self):
-        if (len(self.cpu_data_list) - 1) <= 0: return -1
-        return max(self.__calculateIO())
-    
-    def ioMin(self):
-        if (len(self.cpu_data_list) - 1) <= 0: return -1
-        return min(self.__calculateIO()) 
-    
-    def ioAvg(self):
-        if (len(self.cpu_data_list) - 1) <= 0: return -1
-        return sum(self.__calculateIO()) / (len(self.cpu_data_list) - 1)
+class CpuStats(object):
 
-    def __calculateOverallCpuUsageUserSysIrq(self):
-        usages = []
-        for i in xrange(1, len(self.cpu_data_list)):
-            pre_cpu_data = self.cpu_data_list[i-1]
-            cpu_data = self.cpu_data_list[i]
-            cpu_precentage = cpu_data.calculateCpuUsageUserSysIrq(pre_cpu_data, 'cpu')
-            usages.append(cpu_precentage)
-        return usages
+    def __init__(self, cpu_stats_list, query):
+        self.stats_list = cpu_stats_list
+        self.query = query
+        self.pre_stat = None
+        self.current_stat = self.stats_list[0]
+        self.current_stat_current_id = 0
+        self.index = 0
+        self.__shiftOneStat()
 
-    def __calculateOverallCpuUsageUser(self):
-        usages = []
-        for i in xrange(1, len(self.cpu_data_list)):
-            pre_cpu_data = self.cpu_data_list[i-1]
-            cpu_data = self.cpu_data_list[i]
-            cpu_precentage = cpu_data.calculateCpuUsageUser(pre_cpu_data, 'cpu')
-            usages.append(cpu_precentage)
-        return usages
+    def __iter__(self):
+        return self
 
-    def __calculateOverallCpuUsageSysIrq(self):
-        usages = []
-        for i in xrange(1, len(self.cpu_data_list)):
-            pre_cpu_data = self.cpu_data_list[i-1]
-            cpu_data = self.cpu_data_list[i]
-            cpu_precentage = cpu_data.calculateCpuUsageSysIrq(pre_cpu_data, 'cpu')
-            usages.append(cpu_precentage)
-        return usages
-    
-    def __calculateIO(self):
-        usages = []
-        for i in xrange(1, len(self.cpu_data_list)):
-            pre_cpu_data = self.cpu_data_list[i-1]
-            cpu_data = self.cpu_data_list[i]
-            cpu_precentage = cpu_data.calculateIOUsage(pre_cpu_data)
-            usages.append(cpu_precentage)
-        return usages
-    
-    def __calculatePerCoreUsageUserSysIrq(self):
-        usages = []
-        for i in xrange(1, len(self.cpu_data_list)):
-            pre_cpu_data = self.cpu_data_list[i-1]
-            cpu_data = self.cpu_data_list[i]
-            for cpu_id in cpu_data.cpu_raw_values:
-                if re.match('cpu[0-9]+', cpu_id):
-                    cpu_precentage = cpu_data.calculateCpuUsageUserSysIrq(pre_cpu_data, cpu_id)
-                    usages.append(cpu_precentage)
-        return usages
-    
-    def __calculatePerCoreUsageUser(self):
-        usages = []
-        for i in xrange(1, len(self.cpu_data_list)):
-            pre_cpu_data = self.cpu_data_list[i-1]
-            cpu_data = self.cpu_data_list[i]
-            for cpu_id in cpu_data.cpu_raw_values:
-                if re.match('cpu[0-9]+', cpu_id):
-                    cpu_precentage = cpu_data.calculateCpuUsageUser(pre_cpu_data, cpu_id)
-                    usages.append(cpu_precentage)
-        return usages
-    
-    def __calculatePerCoreUsageSysIrq(self):
-        usages = []
-        for i in xrange(1, len(self.cpu_data_list)):
-            pre_cpu_data = self.cpu_data_list[i-1]
-            cpu_data = self.cpu_data_list[i]
-            for cpu_id in cpu_data.cpu_raw_values:
-                if re.match('cpu[0-9]+', cpu_id):
-                    cpu_precentage = cpu_data.calculateCpuUsageSysIrq(pre_cpu_data, cpu_id)
-                    usages.append(cpu_precentage)
-        return usages
-    
-    def __calculateAppProcessUsage(self):
-        usages = []
-        for i in xrange(1, len(self.cpu_data_list)):
-            pre_cpu_data = self.cpu_data_list[i-1]
-            cpu_data = self.cpu_data_list[i]
-            if 'process' in pre_cpu_data.cpu_raw_values and 'process' in cpu_data.cpu_raw_values:
-                usage = cpu_data.calculateAppProcessUsage(pre_cpu_data)
-                usages.append(usage)
-        return usages
+    def next(self):
+        if self.index >= len(self.stats_list):
+            raise StopIteration()
+        if self.query == 'overall user + system':
+            res = self.__getUserPercentage(self.pre_stat, self.current_stat, 'cpu') + \
+                  self.__getSysPercentage(self.pre_stat, self.current_stat, 'cpu')
+            self.__shiftOneStat()
+        elif self.query == 'overall user':
+            res = self.__getUserPercentage(self.pre_stat, self.current_stat, 'cpu')
+            self.__shiftOneStat()
+        elif self.query == 'overall system':
+            res = self.__getSysPercentage(self.pre_stat, self.current_stat, 'cpu')
+            self.__shiftOneStat()
+        elif self.query == 'per CPU user + system':
+            res = self.__getUserPercentage(self.pre_stat, self.current_stat, 'cpu'+ str(self.current_stat_current_id)) + \
+            self.__getSysPercentage(self.pre_stat, self.current_stat, 'cpu'+ str(self.current_stat_current_id))
+            self.__shiftOneCore()
+        elif self.query == 'per CPU user':
+            res = self.__getUserPercentage(self.pre_stat, self.current_stat, 'cpu'+ str(self.current_stat_current_id))
+            self.__shiftOneCore()
+        elif self.query == 'per CPU system':
+            res = self.__getSysPercentage(self.pre_stat, self.current_stat, 'cpu'+ str(self.current_stat_current_id))
+            self.__shiftOneCore()
+        elif self.query == 'io':
+            res = self.__getIOPercentage(self.pre_stat, self.current_stat, 'cpu')
+            self.__shiftOneStat()
+        else:
+            raise Exception('unsupported query')
+        return res
 
+    def __shiftOneStat(self):
+        self.pre_stat = self.current_stat
+        self.index += 1
+        if self.index >= len(self.stats_list): 
+            self.current_stat = None
+        else:
+            self.current_stat = self.stats_list[self.index]
 
-class CpuData(object):
-    """
-      Collect data from /proc/stat and /proc/{pid}/stat text
-    """
-    
-    def __init__(self):
-        self.cpu_raw_values = {}
-        
-    def isEmpty(self):
-        return not self.cpu_raw_values
-    
-    def isValid(self):
-        return not self.isEmpty()
-    
-    def captureCpuValues(self, text):
+    def __shiftOneCore(self):
+        self.current_stat_current_id += 1
+        if self.current_stat_current_id >= self.getCpuCoreCount():
+            self.current_stat_current_id = 0
+            self.__shiftOneStat()
+
+    def __getUserPercentage(self, previous, current, cpu_id):
+        total_delta = self._getTotalCpuTime(current.data, cpu_id) - \
+                      self._getTotalCpuTime(previous.data, cpu_id)
+        user_delta = (current.data[cpu_id])['user'] - (previous.data[cpu_id])['user']
+        percentage = float(user_delta) / total_delta * 100
+        return percentage
+
+    def __getSysPercentage(self, previous, current, cpu_id):
+        total_delta = self._getTotalCpuTime(current.data, cpu_id) - \
+                      self._getTotalCpuTime(previous.data, cpu_id)
+        sys_delta = (current.data[cpu_id])['system'] - (previous.data[cpu_id])['system']
+        percentage = float(sys_delta) / total_delta * 100
+        return percentage
+
+    def __getIOPercentage(self, previous, current, cpu_id):
+        total_delta = self._getTotalCpuTime(current.data, cpu_id) - \
+                      self._getTotalCpuTime(previous.data, cpu_id)
+        io_delta = (current.data[cpu_id])['iowait'] - (previous.data[cpu_id])['iowait']
+        percentage = float(io_delta) / total_delta * 100
+        return percentage
+
+    def _getTotalCpuTime(self, data, cpu_id):
+        total = 0
+        for value_name in data[cpu_id]:
+            total += (data[cpu_id])[value_name]
+        return total
+
+    def getCpuCoreCount(self):
+        if len(self.stats_list) == 0: return 0
+        return len(self.stats_list[0].data) - 1
+
+class MemStats(object):
+
+    def __init__(self, mem_stats_list, query):
+        self.stats_list = mem_stats_list
+        self.query = query
+        self.current_stat = self.stats_list[0]
+        self.index = 0
+
+    def __iter__(self):
+        return self
+
+    def next(self):
+        if self.index >= len(self.stats_list):
+            raise StopIteration()
+        if self.query == 'Total_Free_Cached_Used':
+            res = [self.current_stat.data['MemTotal'],
+                   self.current_stat.data['MemFree'],
+                   self.current_stat.data['Cached'],
+                   self.current_stat.getMemUsed()]
+            self.__shiftOneStat()
+            return res
+        elif self.query == 'MemUsed':
+            used = self.current_stat.getMemUsed()
+            self.__shiftOneStat()
+            return used
+        else:
+            raise Exception('unsupported query')
+
+    def __shiftOneStat(self):
+        self.index += 1
+        if self.index >= len(self.stats_list): 
+            self.current_stat = None
+        else:
+            self.current_stat = self.stats_list[self.index]
+
+class Data(object):
+
+    def parseText(self, text):
+        raise NotImplementedError("Subclasses should implement this!")
+
+class ProcStatData(Data):
+
+    def __init__(self, date):
+        self.data = {}
+        self.date = date
+
+    def parseText(self, log_file):
+        end_regexp = re.compile('---- ')
+        line = log_file.readline()
+        while line and not end_regexp.search(line):
+            if line.startswith('cpu'):
+                items = line.split()
+                cpu_id = items[0]
+                if cpu_id not in self.data: self.data[cpu_id] = {}
+                self.__fillData(self.data[cpu_id], items)
+            line = log_file.readline()
+        return line
+
+    def getCoreCount(self):
+        return len(self.data) - 1
+
+    def __fillData(self, data, items):
         """ Example
                  user  nice system idle    iowait irq  softirq steal guest guest_nice  
              cpu 74608 2520 24433  1117073 6176   4054 0       0     0     0 
         """
-        values = {}
-        if re.match(PROCESS_CPU_STAT_PATTERN, text):
-            items = text.split()
-            values['process_utime'] = int((items[13]))
-            values['process_stime'] = int((items[14]))
-            values['process_cutime'] = int((items[15]))
-            values['process_cstime'] = int((items[16]))
-            self.cpu_raw_values['process'] = values
-        elif text.startswith('cpu'):
-            items = text.split()
-            values['cpu_idel'] = int(items[4])
-            values['cpu_iowait'] = int(items[5])
-            values['cpu_user'] = int(items[1])
-            values['cpu_nice'] = int(items[2])
-            values['cpu_system'] = int(items[3])
-            values['cpu_irq'] = int(items[6])
-            values['cpu_softirq'] = int(items[7])
-            values['cpu_steal'] = int(items[8])
-            cpu_id = items[0]
-            self.cpu_raw_values[cpu_id] = values
-    
-    def calculateAppProcessUsage(self, pre_cpu_data):
-        if 'process' not in pre_cpu_data.cpu_raw_values: return 0
-        pre_value = pre_cpu_data.cpu_raw_values['process']
-        value = self.cpu_raw_values['process']
-        process_d = value['process_utime'] + value['process_stime'] + value['process_cutime'] + value['process_cstime'] - \
-                    pre_value['process_utime'] - pre_value['process_stime'] - pre_value['process_cutime'] - pre_value['process_cstime']
-        total_d = self.__calculatTotalDelta(pre_cpu_data, 'cpu')
-        return float(process_d) / total_d
-        
-    def calculateCpuUsageUserSysIrq(self, pre_cpu_data, cpu_id):
-        total_d = self.__calculatTotalDelta(pre_cpu_data, cpu_id)
-        non_idle_d = self.__calculateNonIdleDelta(pre_cpu_data, cpu_id)
-        cpu_percentage = float(non_idle_d) / float(total_d)
-        return cpu_percentage
-    
-    def calculateCpuUsageUser(self, pre_cpu_data, cpu_id):
-        total_d = self.__calculatTotalDelta(pre_cpu_data, cpu_id)
-        user_d = self.__calculateUserDelta(pre_cpu_data, cpu_id)
-        user_percentage = float(user_d) / float(total_d)
-        return user_percentage
-    
-    def calculateCpuUsageSysIrq(self, pre_cpu_data, cpu_id):
-        total_d = self.__calculatTotalDelta(pre_cpu_data, cpu_id)
-        sys_irq_d = self.__calculateSysIrqDelta(pre_cpu_data, cpu_id)
-        sys_irq_percentage = float(sys_irq_d) / float(total_d)
-        return sys_irq_percentage
-    
-    def calculateIOUsage(self, pre_cpu_data):
-        total_d = self.__calculatTotalDelta(pre_cpu_data, 'cpu')
-        io_d = self.__calculateIODelta(pre_cpu_data)
-        io_percentage = float(io_d) / float(total_d)
-        return io_percentage
-    
-    def __calculatTotalDelta(self, pre_cpu_data, cpu_id):
-        pre_values= pre_cpu_data.cpu_raw_values[cpu_id]
-        values = self.cpu_raw_values[cpu_id]
-        pre_idle = pre_values['cpu_idel'] + pre_values['cpu_iowait']
-        idle = values['cpu_idel'] + values['cpu_iowait']
-        pre_non_idle = pre_values['cpu_user'] + pre_values['cpu_nice'] + pre_values['cpu_system'] + \
-                       pre_values['cpu_irq'] + pre_values['cpu_softirq'] + pre_values['cpu_steal']
-        non_idle = values['cpu_user'] + values['cpu_nice'] + values['cpu_system'] + \
-                   values['cpu_irq'] + values['cpu_softirq'] + values['cpu_steal']
-        pre_total = pre_idle + pre_non_idle
-        total = idle + non_idle
-        total_d = total - pre_total
-        return total_d
-    
-    def __calculateNonIdleDelta(self, pre_cpu_data, cpu_id):
-        pre_values= pre_cpu_data.cpu_raw_values[cpu_id]
-        values = self.cpu_raw_values[cpu_id]
-        pre_non_idle = pre_values['cpu_user'] + pre_values['cpu_nice'] + pre_values['cpu_system'] + \
-                       pre_values['cpu_irq'] + pre_values['cpu_softirq'] + pre_values['cpu_steal']
-        non_idle = values['cpu_user'] + values['cpu_nice'] + values['cpu_system'] + \
-                   values['cpu_irq'] + values['cpu_softirq'] + values['cpu_steal']
-        non_idle_delta = non_idle - pre_non_idle
-        return non_idle_delta
-    
-    def __calculateUserDelta(self, pre_cpu_data, cpu_id):
-        pre_values= pre_cpu_data.cpu_raw_values[cpu_id]
-        values = self.cpu_raw_values[cpu_id]
-        user_delta = values['cpu_user'] - pre_values['cpu_user']
-        return user_delta
-    
-    def __calculateSysIrqDelta(self, pre_cpu_data, cpu_id):
-        pre_values= pre_cpu_data.cpu_raw_values[cpu_id]
-        values = self.cpu_raw_values[cpu_id]
-        pre_sys_irq = pre_values['cpu_system'] + pre_values['cpu_irq']
-        sys_irq = values['cpu_system'] + pre_values['cpu_irq']
-        sys_irq_delta = sys_irq - pre_sys_irq
-        return sys_irq_delta
-    
-    def __calculateIODelta(self, pre_cpu_data):
-        pre_values= pre_cpu_data.cpu_raw_values['cpu']
-        values = self.cpu_raw_values['cpu']
-        pre_io = pre_values['cpu_iowait']
-        io = values['cpu_iowait']
-        io_delta = io - pre_io
-        return io_delta
+        data['user'] = int(items[1])
+        data['nice'] = int(items[2])
+        data['system'] = int(items[3])
+        data['idle'] = int(items[4])
+        data['iowait'] = int(items[5])
+        data['irq'] = int(items[6])
+        data['softirq'] = int(items[7])
 
-
-class MemInfo(object):
-    """
-      calculate memory usage based on collected MemData
-    """
-    def __init__(self):
-        self.mem_data_list = []
-    
-    def receiveMemData(self, mem_data):
-        if not mem_data.isEmpty():
-            self.mem_data_list.append(mem_data)
-    
-    def getSummary(self):
+    def __str__(self):
         res = ''
-        res += 'Physical Memory (MB) min: {0}\n'.format(self.memMin() / 1024)
-        res += 'Physical Memory (MB) avg: {0}\n'.format(self.memAvg() / 1024)
-        res += 'Physical Memory (MB) max: {0}\n'.format(self.memMax() / 1024)
-        res += 'Process Physical Memory (MB) min: {0}\n'.format(self.processMin() / 1024)
-        res += 'Process Physical Memory (MB) avg: {0}\n'.format(self.processAvg() / 1024)
-        res += 'Process Physical Memory (MB) max: {0}\n'.format(self.processMax() / 1024)
+        res += str(self.date) + ': '
+        res += 'Cpu Data: {0}\n'.format(self.data)
         return res
 
-    def memMin(self):
-        if len(self.mem_data_list) <= 0: return -1
-        return min(self.__calculateMemUsages())
-    
-    def memMax(self):
-        if len(self.mem_data_list) <= 0: return -1
-        return max(self.__calculateMemUsages())
-    
-    def memAvg(self):
-        if len(self.mem_data_list) <= 0: return -1
-        return sum(self.__calculateMemUsages()) / len(self.mem_data_list)
-    
-    def virtMin(self):
-        if len(self.mem_data_list) <= 0: return -1
-        return min(self.__calculateVirtUsages())
-    
-    def virtMax(self):
-        if len(self.mem_data_list) <= 0: return -1
-        return max(self.__calculateVirtUsages())
+    def __repr__(self):
+        return self.__str__()
 
-    def virtAvg(self):
-        if len(self.mem_data_list) <= 0: return -1
-        return sum(self.__calculateVirtUsages()) / len(self.mem_data_list)
-    
-    def processMax(self):
-        usages = self.__calculateProcessMemUsages()
-        if len(usages) <= 0: return -1
-        return max(usages)
-    
-    def processMin(self):
-        usages = self.__calculateProcessMemUsages()
-        if len(usages) <= 0: return -1
-        return min(usages)
-    
-    def processAvg(self):
-        usages = self.__calculateProcessMemUsages()
-        if len(usages) <= 0: return -1
-        return sum(usages) / len(usages)
+class ProcMeminfoData(Data):
 
-    def __calculateMemUsages(self):
-        usages = []
-        for mem_data in self.mem_data_list:
-            usages.append(mem_data.calculateMemUsage())
-        return usages
-    
-    def __calculateVirtUsages(self):
-        usages = []
-        for mem_data in self.mem_data_list:
-            usages.append(mem_data.calculateVmUsage())
-        return usages
-    
-    def __calculateProcessMemUsages(self):
-        usages = []
-        for mem_data in self.mem_data_list:
-            if mem_data.calculateProcessMemUsage() >= 0:
-                usages.append(mem_data.calculateProcessMemUsage())
-        return usages
+    def __init__(self, date):
+        self.data = {}
+        self.date = date
 
+    def parseText(self, log_file):
+        end_regexp = re.compile('---- ')
+        line = log_file.readline()
+        while line and not end_regexp.search(line):
+            items = line.split()
+            value_name = (items[0])[:-1]
+            self.data[value_name] = int(items[1])
+            line = log_file.readline()
+        return line
 
-class MemData(object):
-    """
-      Collect data from /proc/meminfo
-    """
-    
-    def __init__(self):
-        self.mem_raw_values = {}
-    
-    def isEmpty(self):
-        return not self.mem_raw_values
-    
-    def isValid(self):
-        if 'MemFree' not in self.mem_raw_values: return False
-        if 'MemTotal' not in self.mem_raw_values: return False
-        if 'Buffers' not in self.mem_raw_values: return False
-        if 'Cached' not in self.mem_raw_values: return False
-        if 'SReclaimable' not in self.mem_raw_values: return False
-        if 'Shmem' not in self.mem_raw_values: return False
-        return True
-        
-    def captureMemValues(self, text):
-        items = text.split()
-        if len(items) <= 0: return
-        if items[0] == 'MemTotal:':
-            self.mem_raw_values['MemTotal'] = int(items[1])
-        elif items[0] == 'MemFree:':
-            self.mem_raw_values['MemFree'] = int(items[1])
-        elif items[0] == 'Buffers:':
-            self.mem_raw_values['Buffers'] = int(items[1])
-        elif items[0] == 'Cached:':
-            self.mem_raw_values['Cached'] = int(items[1])
-        elif items[0] == 'SReclaimable:':
-            self.mem_raw_values['SReclaimable'] = int(items[1])
-        elif items[0] == 'Shmem:':
-            self.mem_raw_values['Shmem'] = int(items[1])
-        elif items[0] == 'VmallocTotal:':
-            self.mem_raw_values['VmallocTotal'] = int(items[1])
-        elif items[0] == 'VmRSS:':
-            self.mem_raw_values['process_VmRss'] = int(items[1])
-            
-    def calculateMemUsage(self):
-        total_used_memory = self.mem_raw_values['MemTotal'] - self.mem_raw_values['MemFree'] -\
-                            (self.mem_raw_values['Buffers'] + \
-                             (self.mem_raw_values['Cached'] + self.mem_raw_values['SReclaimable'] - self.mem_raw_values['Shmem']))
-        return total_used_memory
-    
-    def calculateVmUsage(self):
-        return self.mem_raw_values['VmallocTotal']
-    
-    def calculateProcessMemUsage(self):
-        if 'process_VmRss' in self.mem_raw_values:
-            return self.mem_raw_values['process_VmRss']
+    def getMemUsed(self):
+        used = self.data['MemTotal'] - \
+               self.data['MemFree'] - \
+               self.data['Cached']
+        return used
+
+    def __str__(self):
+        res = ''
+        res += str(self.date) + ': '
+        res += 'Mem Data: {0}\n'.format(self.data)
+        return res
+
+    def __repr__(self):
+        return self.__str__()
+
+class TopData(Data):
+
+    def __init__(self, date):
+        self.data = {}
+        self.date = date
+
+    def parseText(self, log_file):
+        end_regexp = re.compile('---- ')
+        process_regexp = re.compile('\s+([0-9]+)\s+(.*)\s+(.*)\s+(-*[0-9]+)\s+(\d+%)\s+([A-Z])\s+(\d+)\s+(\d+K)\s+(\d+K)\s+([a-z]+)\s+(.*)' )
+        line = log_file.readline()
+        rss = 0
+        while line and not end_regexp.search(line):
+            if process_regexp.match(line):
+                match_res = process_regexp.match(line)
+                rss += int((match_res.group(9))[:-1])
+            line = log_file.readline()
+        self.data['rss'] = rss
+        return line
+
+    def __str__(self):
+        res = ''
+        res += str(self.date) + ': '
+        res += 'Top Rss: {0}\n'.format(self.data)
+        return res
+
+    def __repr__(self):
+        return self.__str__()
+
+  
+def parseDateText(text):
+    text = re.match('(.*)-------- (.*) --------', text).group(2)
+    date = datetime.strptime(text, '%a %b %d %H:%M:%S %Z %Y')
+    return date
+
+def parseLogFile(file_path):
+    date_regexp = re.compile('^-------- [a-zA-Z]{3,} [a-zA-Z]{3,} [0-9]{1,2} [0-9]{2,}:[0-9]{2,}:[0-9]{2,} GMT [0-9]{4,} --------')
+    proc_stat_start_regexp = re.compile('^---- /proc/stat')
+    proc_meminfo_start_regexp = re.compile('^---- /proc/meminfo')
+    proc_top_start_regexp = re.compile('^---- top')
+    current_date = None
+    cpu_stats = []
+    mem_stats = []
+    top_stats = []
+    f = open(file_path, 'r')
+    line = f.readline()
+    while line:
+        if date_regexp.search(line):
+            current_date = parseDateText(line)
+            line = f.readline()
+        elif proc_stat_start_regexp.search(line):
+            proc_stat_data = ProcStatData(current_date)
+            line = proc_stat_data.parseText(f)
+            cpu_stats.append(proc_stat_data)
+        elif proc_meminfo_start_regexp.search(line):
+            proc_meminfo_data = ProcMeminfoData(current_date)
+            line = proc_meminfo_data.parseText(f)
+            mem_stats.append(proc_meminfo_data)
+        elif proc_top_start_regexp.search(line):
+            top_data = TopData(current_date)
+            line = top_data.parseText(f)
+            top_stats.append(top_data)
         else:
-            return -1
+            line = f.readline()
+    return cpu_stats, mem_stats, top_stats
 
-def resourceStatsReduction(input_path):
-    cpu_info = CpuInfo()
-    mem_info = MemInfo()
-    regexp = re.compile(RECORD_START_PATTERN)
-    with open(input_path, 'r') as f:
-        cpu_usage_record = CpuData()
-        mem_usage_record = MemData()
-        for line in f:
-            if regexp.search(line):
-                print (line)
-                cpu_info.recevieNewData(cpu_usage_record)
-                mem_info.receiveMemData(mem_usage_record)
-                cpu_usage_record = CpuData()
-                mem_usage_record = MemData()
-            cpu_usage_record.captureCpuValues(line)
-            mem_usage_record.captureMemValues(line)
-        if not cpu_usage_record.isValid(): cpu_info.recevieNewData(cpu_usage_record)
-        if not mem_usage_record.isValid(): mem_info.receiveMemData(mem_usage_record)
-    print (cpu_info.getSummary())
-    print (mem_info.getSummary())
-
+def getMemData(mem_stats_list):
+    index = 0
+    res = '# Index,MemTotal,MemFree,Cached,MemUsed\n'
+    mem_stats = MemStats(mem_stats_list, 'Total_Free_Cached_Used')
+    for mem_stat in mem_stats:
+        total, free, cached, used = mem_stat
+        res += '{0},{1},{2},{3},{4}\n'.format(index, total, free, cached, used)
+        index += 1
+    return res
 
 if __name__ == '__main__':
     script_description = """
@@ -545,4 +378,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=script_description)
     parser.add_argument('input_file', type=str, help='input log file')
     args = parser.parse_args()
-    resourceStatsReduction(args.input_file)
+    cpu_stats_list, mem_stats_list, top_stats_list = parseLogFile(args.input_file)
+    resource_usage_stats = ResourceUsageStats(cpu_stats_list, mem_stats_list)
+    res = resource_usage_stats.getSummary()
+    print (res)
