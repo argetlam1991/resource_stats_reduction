@@ -164,8 +164,7 @@ class CpuStats(object):
             self.current_stat = self.stats_list[self.index]
 
     def __getUserPercentage(self, previous, current, cpu_id):
-        total_delta = self._getTotalCpuTime(current.data, cpu_id) - \
-                      self._getTotalCpuTime(previous.data, cpu_id)
+        total_delta = self.__getTotalDelta(previous, current, cpu_id)
         current_user_time = (current.data[cpu_id])['user'] + (current.data[cpu_id])['nice']
         previous_user_time = (previous.data[cpu_id])['user'] + (previous.data[cpu_id])['nice']
         user_delta = current_user_time - previous_user_time
@@ -173,19 +172,20 @@ class CpuStats(object):
         return percentage
 
     def __getSysPercentage(self, previous, current, cpu_id):
-        total_delta = self._getTotalCpuTime(current.data, cpu_id) - \
-                      self._getTotalCpuTime(previous.data, cpu_id)
+        total_delta = self.__getTotalDelta(previous, current, cpu_id)
         current_sys_time = (current.data[cpu_id])['system'] + (current.data[cpu_id])['irq'] + (current.data[cpu_id])['softirq']
         previous_sys_time = (previous.data[cpu_id])['system'] + (previous.data[cpu_id])['irq'] + (previous.data[cpu_id])['softirq']
         sys_delta = current_sys_time - previous_sys_time
         percentage = float(sys_delta) / total_delta * 100
         return percentage
-
-    def _getTotalCpuTime(self, data, cpu_id):
-        total = 0
-        for value_name in data[cpu_id]:
-            total += (data[cpu_id])[value_name]
-        return total
+    
+    def __getTotalDelta(self, previous, current, cpu_id):
+        time_delta = (current.date - previous.date).total_seconds() * 100
+        if cpu_id == 'cpu':
+            time_delta *= self.getCpuCoreCount()
+        return time_delta
+        
+        
 
     def getCpuCoreCount(self):
         if len(self.stats_list) == 0: return 0
@@ -307,8 +307,6 @@ class ProcMeminfoData(Data):
             line = log_file.readline()
         return line
 
-
-
     def __str__(self):
         res = ''
         res += str(self.date) + ': '
@@ -318,48 +316,40 @@ class ProcMeminfoData(Data):
     def __repr__(self):
         return self.__str__()
 
-
-def parseDateText(text):
-    text = re.match('(.*)-------- (.*) --------', text).group(2)
-    date = datetime.strptime(text, '%a %b %d %H:%M:%S %Z %Y')
-    return date
-
-
-def parseLogFile(file_path):
-    date_regexp = re.compile('^-------- [a-zA-Z]{3,} [a-zA-Z]{3,} [0-9]{1,2} [0-9]{2,}:[0-9]{2,}:[0-9]{2,} GMT [0-9]{4,} --------')
-    proc_stat_start_regexp = re.compile('^---- /proc/stat')
-    proc_meminfo_start_regexp = re.compile('^---- /proc/meminfo')
-    current_date = None
-    cpu_stats = []
-    mem_stats = []
-    f = open(file_path, 'r')
-    line = f.readline()
-    while line:
-        if date_regexp.search(line):
-            current_date = parseDateText(line)
-            line = f.readline()
-        elif proc_stat_start_regexp.search(line):
-            proc_stat_data = ProcStatData(current_date)
-            line = proc_stat_data.parseText(f)
-            cpu_stats.append(proc_stat_data)
-        elif proc_meminfo_start_regexp.search(line):
-            proc_meminfo_data = ProcMeminfoData(current_date)
-            line = proc_meminfo_data.parseText(f)
-            mem_stats.append(proc_meminfo_data)
-        else:
-            line = f.readline()
-    return cpu_stats, mem_stats
-
-
-def getMemData(mem_stats_list):
-    index = 0
-    res = '# Index,MemTotal,MemFree,Cached,MemUsed\n'
-    mem_stats = MemStats(mem_stats_list, 'Total_Free_Cached_Used')
-    for mem_stat in mem_stats:
-        total, free, cached, used = mem_stat
-        res += '{0},{1},{2},{3},{4}\n'.format(index, total, free, cached, used)
-        index += 1
-    return res
+class LogParser(object):
+    
+    def __init__(self, file_path):
+        self.file_path = file_path
+        
+    def parseLogFile(self):
+        date_regexp = re.compile('^-------- [a-zA-Z]{3,} [a-zA-Z]{3,} [0-9]{1,2} [0-9]{2,}:[0-9]{2,}:[0-9]{2,} GMT [0-9]{4,} --------')
+        proc_stat_start_regexp = re.compile('^---- /proc/stat')
+        proc_meminfo_start_regexp = re.compile('^---- /proc/meminfo')
+        current_date = None
+        cpu_stats = []
+        mem_stats = []
+        f = open(self.file_path, 'r')
+        line = f.readline()
+        while line:
+            if date_regexp.search(line):
+                current_date = self.__parseDateText(line)
+                line = f.readline()
+            elif proc_stat_start_regexp.search(line):
+                proc_stat_data = ProcStatData(current_date)
+                line = proc_stat_data.parseText(f)
+                cpu_stats.append(proc_stat_data)
+            elif proc_meminfo_start_regexp.search(line):
+                proc_meminfo_data = ProcMeminfoData(current_date)
+                line = proc_meminfo_data.parseText(f)
+                mem_stats.append(proc_meminfo_data)
+            else:
+                line = f.readline()
+        return cpu_stats, mem_stats
+    
+    def __parseDateText(self, text):
+        text = re.match('(.*)-------- (.*) --------', text).group(2)
+        date = datetime.strptime(text, '%a %b %d %H:%M:%S %Z %Y')
+        return date
 
 
 if __name__ == '__main__':
@@ -368,10 +358,11 @@ if __name__ == '__main__':
                            resource usage statistics based on raw data collected from 
                            /proc/stat and /proc/meminfo
                          """
-    parser = argparse.ArgumentParser(description=script_description)
-    parser.add_argument('input_file', type=str, help='input log file')
-    args = parser.parse_args()
-    cpu_stats_list, mem_stats_list = parseLogFile(args.input_file)
+    args_parser = argparse.ArgumentParser(description=script_description)
+    args_parser.add_argument('input_file', type=str, help='input log file')
+    args = args_parser.parse_args()
+    log_parser = LogParser(args.input_file)
+    cpu_stats_list, mem_stats_list = log_parser.parseLogFile()
     resource_usage_stats = ResourceUsageStats(cpu_stats_list, mem_stats_list)
     res = resource_usage_stats.getSummary()
     print (res)
