@@ -38,77 +38,68 @@ class ResourceUsageStats(object):
         self.mem_stats_list = mem_stats_list
 
     def getSummary(self):
-        res = 'Overall CPU - user + sys + irq min: {0:.1f}%\n'.format(min(StatsFactory.CreateIterableStats(self.cpu_stats_list, 'overall user + system')))
-        res += 'Overall CPU - user + sys + irq avg: {0:.1f}%\n'.format(sum(StatsFactory.CreateIterableStats(self.cpu_stats_list, 'overall user + system')) / \
+
+        res = 'Overall CPU - user + sys + irq min: {0:.1f}%\n'.format(min(CpuOverallUserSysStats(CpuStats(self.cpu_stats_list))))
+        
+        res += 'Overall CPU - user + sys + irq avg: {0:.1f}%\n'.format(sum(CpuOverallUserSysStats(CpuStats(self.cpu_stats_list))) / \
+                                                                       (len(self.cpu_stats_list) - 1))
+        res += 'Overall CPU - user + sys + irq max: {0:.1f}%\n'.format(max(CpuOverallUserSysStats(CpuStats(self.cpu_stats_list))))
+        res += 'Overall CPU - user + sys + irq Max - Min: {0:.1f}%\n'.format(max(CpuOverallUserSysStats(CpuStats(self.cpu_stats_list))) -  \
+                                                                             min(CpuOverallUserSysStats(CpuStats(self.cpu_stats_list))))
+        res += 'Overall CPU - user + sys + irq Last - First: {0:.1f}%\n'.format((CpuOverallUserSysStats(CpuStats(self.cpu_stats_list)))[-1] - \
+                                                                                (CpuOverallUserSysStats(CpuStats(self.cpu_stats_list)))[0])
+
+        res += 'Overall CPU - user min: {0:.1f}%\n'.format(min(CpuOverallUserStats(CpuStats(self.cpu_stats_list))))
+        res += 'Overall CPU - user avg: {0:.1f}%\n'.format(sum(CpuOverallUserStats(CpuStats(self.cpu_stats_list))) / \
                                                           (len(self.cpu_stats_list) - 1))
-        res += 'Overall CPU - user + sys + irq max: {0:.1f}%\n'.format(max(StatsFactory.CreateIterableStats(self.cpu_stats_list, 'overall user + system')))
-        res += 'Overall CPU - user + sys + irq Max - Min: {0:.1f}%\n'.format(max(StatsFactory.CreateIterableStats(self.cpu_stats_list, 'overall user + system')) -  \
-                                                                             min(StatsFactory.CreateIterableStats(self.cpu_stats_list, 'overall user + system')))
-        res += 'Overall CPU - user + sys + irq Last - First: {0:.1f}%\n'.format((StatsFactory.CreateIterableStats(self.cpu_stats_list, 'overall user + system'))[-1] - \
-                                                                                (StatsFactory.CreateIterableStats(self.cpu_stats_list, 'overall user + system'))[0])
+        res += 'Overall CPU - user max: {0:.1f}%\n'.format(max(CpuOverallUserStats(CpuStats(self.cpu_stats_list))))
 
-        res += 'Overall CPU - user min: {0:.1f}%\n'.format(min(StatsFactory.CreateIterableStats(self.cpu_stats_list, 'overall user')))
-        res += 'Overall CPU - user avg: {0:.1f}%\n'.format(sum(StatsFactory.CreateIterableStats(self.cpu_stats_list, 'overall user')) / \
+        res += 'Overall CPU - sys min: {0:.1f}%\n'.format(min(CpuOverallSysStats(CpuStats(self.cpu_stats_list))))
+        res += 'Overall CPU - sys avg: {0:.1f}%\n'.format(sum(CpuOverallSysStats(CpuStats(self.cpu_stats_list))) / \
                                                           (len(self.cpu_stats_list) - 1))
-        res += 'Overall CPU - user max: {0:.1f}%\n'.format(max(StatsFactory.CreateIterableStats(self.cpu_stats_list, 'overall user')))
+        res += 'Overall CPU - sys max: {0:.1f}%\n'.format(max(CpuOverallSysStats(CpuStats(self.cpu_stats_list))))
 
-        res += 'Overall CPU - sys min: {0:.1f}%\n'.format(min(StatsFactory.CreateIterableStats(self.cpu_stats_list, 'overall system')))
-        res += 'Overall CPU - sys avg: {0:.1f}%\n'.format(sum(StatsFactory.CreateIterableStats(self.cpu_stats_list, 'overall system')) / \
-                                                          (len(self.cpu_stats_list) - 1))
-        res += 'Overall CPU - sys max: {0:.1f}%\n'.format(max(StatsFactory.CreateIterableStats(self.cpu_stats_list, 'overall system')))
+        res += 'Per CPU - user + sys min: {0:.1f}%\n'.format(min([min(x) for x in CpuPerCoreUserSysStats(CpuStats(self.cpu_stats_list))]))
+        res += 'Per CPU - user + sys max: {0:.1f}%\n'.format(max([max(x) for x in CpuPerCoreUserSysStats(CpuStats(self.cpu_stats_list))]))
 
-        res += 'Per CPU - user + sys min: {0:.1f}%\n'.format(min([min(x) for x in StatsFactory.CreateIterableStats(self.cpu_stats_list, 'per CPU user + system')]))
-        res += 'Per CPU - user + sys max: {0:.1f}%\n'.format(max([max(x) for x in StatsFactory.CreateIterableStats(self.cpu_stats_list, 'per CPU user + system')]))
+        res += 'Per CPU - user min: {0:.1f}%\n'.format(min([min(x) for x in CpuPerCoreUserStats(CpuStats(self.cpu_stats_list))]))
+        res += 'Per CPU - user max: {0:.1f}%\n'.format(max([max(x) for x in CpuPerCoreUserStats(CpuStats(self.cpu_stats_list))]))
 
-        res += 'Per CPU - user min: {0:.1f}%\n'.format(min([min(x) for x in StatsFactory.CreateIterableStats(self.cpu_stats_list, 'per CPU user')]))
-        res += 'Per CPU - user max: {0:.1f}%\n'.format(max([max(x) for x in StatsFactory.CreateIterableStats(self.cpu_stats_list, 'per CPU user')]))
+        res += 'Per CPU - sys min: {0:.1f}%\n'.format(min([min(x) for x in CpuPerCoreSysStats(CpuStats(self.cpu_stats_list))]))
+        res += 'Per CPU - sys max: {0:.1f}%\n'.format(max([max(x) for x in CpuPerCoreSysStats(CpuStats(self.cpu_stats_list))]))
 
-        res += 'Per CPU - sys min: {0:.1f}%\n'.format(min([min(x) for x in StatsFactory.CreateIterableStats(self.cpu_stats_list, 'per CPU system')]))
-        res += 'Per CPU - sys max: {0:.1f}%\n'.format(max([max(x) for x in StatsFactory.CreateIterableStats(self.cpu_stats_list, 'per CPU system')]))
-
-        res += 'Memory in use (MiB) min: {0:.1f}\n'.format(min(StatsFactory.CreateIterableStats(self.mem_stats_list, 'MemUsed')) / 1024)
-        res += 'Memory in use (MiB) avg: {0:.1f}\n'.format((sum(StatsFactory.CreateIterableStats(self.mem_stats_list, 'MemUsed')) / 1024) /
+        res += 'Memory in use (MiB) min: {0:.1f}\n'.format(min(MemUsedStats(MemStats(self.mem_stats_list))) / 1024)
+        res += 'Memory in use (MiB) avg: {0:.1f}\n'.format((sum(MemUsedStats(MemStats(self.mem_stats_list))) / 1024) /
                                                      len(self.mem_stats_list))
-        res += 'Memory in use (MiB) max: {0:.1f}\n'.format(max(StatsFactory.CreateIterableStats(self.mem_stats_list, 'MemUsed')) / 1024)
+        res += 'Memory in use (MiB) max: {0:.1f}\n'.format(max(MemUsedStats(MemStats(self.mem_stats_list))) / 1024)
 
-        res += 'Memory in use (MiB) Max - Min : {0:.1f}\n'.format((max(StatsFactory.CreateIterableStats(self.mem_stats_list, 'MemUsed')) - \
-                                                         min(StatsFactory.CreateIterableStats(self.mem_stats_list, 'MemUsed')))  / 1024)
-        res += 'Memory in use (MiB) Last - First: {0:.1f}'.format(((StatsFactory.CreateIterableStats(self.mem_stats_list, 'MemUsed'))[-1] - \
-                                                                   (StatsFactory.CreateIterableStats(self.mem_stats_list, 'MemUsed'))[0]) / 1024)
+        res += 'Memory in use (MiB) Max - Min : {0:.1f}\n'.format((max(MemUsedStats(MemStats(self.mem_stats_list))) - \
+                                                         min(MemUsedStats(MemStats(self.mem_stats_list))))  / 1024)
+        res += 'Memory in use (MiB) Last - First: {0:.1f}'.format(((MemUsedStats(MemStats(self.mem_stats_list)))[-1] - \
+                                                                   (MemUsedStats(MemStats(self.mem_stats_list)))[0]) / 1024)
         return res
 
 
-class StatsFactory(object):
-
-    @classmethod
-    def CreateIterableStats(cls, stats_list, query):
-        if query == 'overall user + system':
-            return CpuStats(stats_list, query)
-        elif query == 'overall user':
-            return CpuStats(stats_list, query)
-        elif query == 'overall system':
-            return CpuStats(stats_list, query)
-        elif query == 'per CPU user + system':
-            return CpuStats(stats_list, query)
-        elif query == 'per CPU user':
-            return CpuStats(stats_list, query)
-        elif query == 'per CPU system':
-            return CpuStats(stats_list, query)
-        elif query == 'MemUsed':
-            return MemStats(stats_list, query)
-        else:
-            return None
+class Stats(object):
 
 
-class CpuStats(object):
+    def __getitem__(self, index):
+        raise NotImplementedError("Subclasses should implement this!")
 
-    def __init__(self, cpu_stats_list, query):
-        self.stats_list = cpu_stats_list
-        self.query = query
-        self.pre_stat = None
-        self.current_stat = self.stats_list[0]
+    def __iter__(self):
+        return self
+
+    def next(self):
+        raise NotImplementedError("Subclasses should implement this!")
+
+
+class CpuStats(Stats):
+
+    def __init__(self, stats_list):
+        self.stats_list = stats_list
+        self.pre_stat = self.stats_list[0]
+        self.current_stat = self.stats_list[1]
         self.index = 0
-        self.__shiftOneStat()
 
     def __getitem__(self, index):
         pre_index = index
@@ -118,41 +109,13 @@ class CpuStats(object):
             cur_index = index
         previous = self.stats_list[pre_index]
         current = self.stats_list[cur_index]
-        return self.__getPercentage(previous, current)
-
-    def __iter__(self):
-        return self
+        return (previous, current)
 
     def next(self):
-        if self.index >= len(self.stats_list):
+        if self.index >= len(self.stats_list) - 1:
             raise StopIteration()
-        res = self.__getPercentage(self.pre_stat, self.current_stat)
+        res = self.__getitem__(self.index)
         self.__shiftOneStat()
-        return res
-
-    def __getPercentage(self, previous, current):
-        if self.query == 'overall user + system':
-            res = self.__getUserPercentage(previous, current, 'cpu') + \
-                  self.__getSysPercentage(previous, current, 'cpu')
-        elif self.query == 'overall user':
-            res = self.__getUserPercentage(previous, current, 'cpu')
-        elif self.query == 'overall system':
-            res = self.__getSysPercentage(previous, current, 'cpu')
-        elif self.query == 'per CPU user + system':
-            res = []
-            for cpu_id in xrange(self.getCpuCoreCount()):
-                res.append(self.__getUserPercentage(previous, current, 'cpu'+ str(cpu_id)) + \
-                           self.__getSysPercentage(previous, current, 'cpu'+ str(cpu_id)))
-        elif self.query == 'per CPU user':
-            res = []
-            for cpu_id in xrange(self.getCpuCoreCount()):
-                res.append(self.__getUserPercentage(previous, current, 'cpu'+ str(cpu_id)))
-        elif self.query == 'per CPU system':
-            res = []
-            for cpu_id in xrange(self.getCpuCoreCount()):
-                res.append(self.__getSysPercentage(previous, current, 'cpu'+ str(cpu_id)))
-        else:
-            raise Exception('unsupported query')
         return res
 
     def __shiftOneStat(self):
@@ -163,40 +126,152 @@ class CpuStats(object):
         else:
             self.current_stat = self.stats_list[self.index]
 
-    def __getUserPercentage(self, previous, current, cpu_id):
-        total_delta = self.__getTotalDelta(previous, current, cpu_id)
+    def getTotalDelta(self, previous, current, cpu_id):
+        time_delta = (current.date - previous.date).total_seconds() * 100
+        if cpu_id == 'cpu':
+            time_delta *= self.getCpuCoreCount()
+        return time_delta
+    
+    def getUserPercentage(self, previous, current, cpu_id):
+        total_delta = self.getTotalDelta(previous, current, cpu_id)
         current_user_time = (current.data[cpu_id])['user'] + (current.data[cpu_id])['nice']
         previous_user_time = (previous.data[cpu_id])['user'] + (previous.data[cpu_id])['nice']
         user_delta = current_user_time - previous_user_time
         percentage = float(user_delta) / total_delta * 100
         return percentage
 
-    def __getSysPercentage(self, previous, current, cpu_id):
-        total_delta = self.__getTotalDelta(previous, current, cpu_id)
+    def getSysPercentage(self, previous, current, cpu_id):
+        total_delta = self.getTotalDelta(previous, current, cpu_id)
         current_sys_time = (current.data[cpu_id])['system'] + (current.data[cpu_id])['irq'] + (current.data[cpu_id])['softirq']
         previous_sys_time = (previous.data[cpu_id])['system'] + (previous.data[cpu_id])['irq'] + (previous.data[cpu_id])['softirq']
         sys_delta = current_sys_time - previous_sys_time
         percentage = float(sys_delta) / total_delta * 100
         return percentage
-    
-    def __getTotalDelta(self, previous, current, cpu_id):
-        time_delta = (current.date - previous.date).total_seconds() * 100
-        if cpu_id == 'cpu':
-            time_delta *= self.getCpuCoreCount()
-        return time_delta
-        
-        
 
     def getCpuCoreCount(self):
         if len(self.stats_list) == 0: return 0
         return len(self.stats_list[0].data) - 1
 
+            
+class CpuOverallUserSysStats(Stats):
+    
+    def __init__(self, cpu_stats):
+        self.cpu_stats = cpu_stats
+        
+    def __getitem__(self, index):
+        previous, current = self.cpu_stats[index]
+        return self.getPercentage(previous, current)
+    
+    def getPercentage(self, previous, current):
+        res = self.cpu_stats.getUserPercentage(previous, current, 'cpu') + \
+              self.cpu_stats.getSysPercentage(previous, current, 'cpu')
+        return res
+    
+    def next(self):
+        previous, current = self.cpu_stats.next()
+        return self.getPercentage(previous, current)
 
-class MemStats(object):
 
-    def __init__(self, mem_stats_list, query):
+class CpuOverallUserStats(Stats):
+    
+    def __init__(self, cpu_stats):
+        self.cpu_stats = cpu_stats
+        
+    def __getitem__(self, index):
+        previous, current = self.cpu_stats[index]
+        return self.getPercentage(previous, current)
+    
+    def getPercentage(self, previous, current):
+        return self.cpu_stats.getUserPercentage(previous, current, 'cpu')
+    
+    def next(self):
+        previous, current = self.cpu_stats.next()
+        return self.getPercentage(previous, current)
+
+
+class CpuOverallSysStats(Stats):
+
+    def __init__(self, cpu_stats):
+        self.cpu_stats = cpu_stats
+
+    def __getitem__(self, index):
+        previous, current = self.cpu_stats[index]
+        return self.getPercentage(previous, current)
+
+    def getPercentage(self, previous, current):
+        res = self.cpu_stats.getSysPercentage(previous, current, 'cpu')
+        return res
+
+    def next(self):
+        previous, current = self.cpu_stats.next()
+        return self.getPercentage(previous, current)
+
+
+class CpuPerCoreUserSysStats(Stats):
+
+    def __init__(self, cpu_stats):
+        self.cpu_stats = cpu_stats
+
+    def __getitem__(self, index):
+        previous, current = self.cpu_stats[index]
+        return self.getPercentage(previous, current)
+
+    def getPercentage(self, previous, current):
+        res = []
+        for cpu_id in xrange(self.cpu_stats.getCpuCoreCount()):
+                res.append(self.cpu_stats.getUserPercentage(previous, current, 'cpu'+ str(cpu_id)) + \
+                           self.cpu_stats.getSysPercentage(previous, current, 'cpu'+ str(cpu_id)))
+        return res
+
+    def next(self):
+        previous, current = self.cpu_stats.next()
+        return self.getPercentage(previous, current)
+
+
+class CpuPerCoreUserStats(Stats):
+
+    def __init__(self, cpu_stats):
+        self.cpu_stats = cpu_stats
+
+    def __getitem__(self, index):
+        previous, current = self.cpu_stats[index]
+        return self.getPercentage(previous, current)
+
+    def getPercentage(self, previous, current):
+        res = []
+        for cpu_id in xrange(self.cpu_stats.getCpuCoreCount()):
+                res.append(self.cpu_stats.getUserPercentage(previous, current, 'cpu'+ str(cpu_id)))
+        return res
+
+    def next(self):
+        previous, current = self.cpu_stats.next()
+        return self.getPercentage(previous, current)
+
+
+class CpuPerCoreSysStats(Stats):
+
+    def __init__(self, cpu_stats):
+        self.cpu_stats = cpu_stats
+
+    def __getitem__(self, index):
+        previous, current = self.cpu_stats[index]
+        return self.getPercentage(previous, current)
+
+    def getPercentage(self, previous, current):
+        res = []
+        for cpu_id in xrange(self.cpu_stats.getCpuCoreCount()):
+                res.append(self.cpu_stats.getSysPercentage(previous, current, 'cpu'+ str(cpu_id)))
+        return res
+
+    def next(self):
+        previous, current = self.cpu_stats.next()
+        return self.getPercentage(previous, current)
+
+
+class MemStats(Stats):
+
+    def __init__(self, mem_stats_list):
         self.stats_list = mem_stats_list
-        self.query = query
         self.current_stat = self.stats_list[0]
         self.index = 0
 
@@ -204,34 +279,14 @@ class MemStats(object):
         return self
     
     def __getitem__(self, index):
-        return self.__getUsage(self.stats_list[index])
+        return self.stats_list[index]
 
     def next(self):
         if self.index >= len(self.stats_list):
             raise StopIteration()
-        res = self.__getUsage(self.current_stat)
+        res = self.__getitem__(self.index)
         self.__shiftOneStat()
-        return res
-        
-    def __getUsage(self, stat):
-        if self.query == 'Total_Free_Cached_Used':
-            res = [stat.data['MemTotal'],
-                   stat.data['MemFree'],
-                   stat.data['Cached'],
-                   self.__getMemUsed(stat)]
-            return res
-        elif self.query == 'MemUsed':
-            used = self.__getMemUsed(stat)
-            return used
-        else:
-            raise Exception('unsupported query')
-        
-    def __getMemUsed(self, stat):
-        used = stat.data['MemTotal'] - \
-               stat.data['MemFree'] - \
-               stat.data['Cached']
-        return used
-        
+        return res 
 
     def __shiftOneStat(self):
         self.index += 1
@@ -239,6 +294,26 @@ class MemStats(object):
             self.current_stat = None
         else:
             self.current_stat = self.stats_list[self.index]
+
+
+class MemUsedStats(Stats):
+
+    def __init__(self, mem_stats):
+        self.mem_stats = mem_stats
+    
+    def __getitem__(self, index):
+        stat = self.mem_stats[index]
+        return self.getUsed(stat)
+    
+    def next(self):
+        stat = self.mem_stats.next()
+        return self.getUsed(stat)
+    
+    def getUsed(self, stat):
+        used = stat.data['MemTotal'] - \
+               stat.data['MemFree'] - \
+               stat.data['Cached']
+        return used
 
 
 class Data(object):
