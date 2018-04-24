@@ -2,7 +2,7 @@
 
 """
 This script is for obtaining high-level android phone hardware resource usage statistics based on
-raw data collected from /proc/stat /proc/{pid}/stat and /proc/meminfo
+raw data collected from /proc/stat and /proc/meminfo
 
 Use output from the following command:
     ../tools/resource_stats_reduction resource_stats_~~~~ | tee reduced_stats_~~~~
@@ -33,6 +33,7 @@ from datetime import datetime
 
 class ResourceUsageStats(object):
 
+
     def __init__(self, cpu_stats_list, mem_stats_list):
         self.cpu_stats_list = cpu_stats_list
         self.mem_stats_list = mem_stats_list
@@ -42,7 +43,7 @@ class ResourceUsageStats(object):
         res = 'Overall CPU - user + sys + irq min: {0:.1f}%\n'.format(min(CpuOverallUserSysStats(CpuStats(self.cpu_stats_list))))
         
         res += 'Overall CPU - user + sys + irq avg: {0:.1f}%\n'.format(sum(CpuOverallUserSysStats(CpuStats(self.cpu_stats_list))) / \
-                                                                       (len(self.cpu_stats_list) - 1))
+                                                                       (CpuStats(self.cpu_stats_list).getStatsCount()))
         res += 'Overall CPU - user + sys + irq max: {0:.1f}%\n'.format(max(CpuOverallUserSysStats(CpuStats(self.cpu_stats_list))))
         res += 'Overall CPU - user + sys + irq Max - Min: {0:.1f}%\n'.format(max(CpuOverallUserSysStats(CpuStats(self.cpu_stats_list))) -  \
                                                                              min(CpuOverallUserSysStats(CpuStats(self.cpu_stats_list))))
@@ -51,12 +52,12 @@ class ResourceUsageStats(object):
 
         res += 'Overall CPU - user min: {0:.1f}%\n'.format(min(CpuOverallUserStats(CpuStats(self.cpu_stats_list))))
         res += 'Overall CPU - user avg: {0:.1f}%\n'.format(sum(CpuOverallUserStats(CpuStats(self.cpu_stats_list))) / \
-                                                          (len(self.cpu_stats_list) - 1))
+                                                          (CpuStats(self.cpu_stats_list).getStatsCount()))
         res += 'Overall CPU - user max: {0:.1f}%\n'.format(max(CpuOverallUserStats(CpuStats(self.cpu_stats_list))))
 
         res += 'Overall CPU - sys min: {0:.1f}%\n'.format(min(CpuOverallSysStats(CpuStats(self.cpu_stats_list))))
         res += 'Overall CPU - sys avg: {0:.1f}%\n'.format(sum(CpuOverallSysStats(CpuStats(self.cpu_stats_list))) / \
-                                                          (len(self.cpu_stats_list) - 1))
+                                                          (CpuStats(self.cpu_stats_list).getStatsCount()))
         res += 'Overall CPU - sys max: {0:.1f}%\n'.format(max(CpuOverallSysStats(CpuStats(self.cpu_stats_list))))
 
         res += 'Per CPU - user + sys min: {0:.1f}%\n'.format(min([min(x) for x in CpuPerCoreUserSysStats(CpuStats(self.cpu_stats_list))]))
@@ -94,6 +95,7 @@ class Stats(object):
 
 
 class CpuStats(Stats):
+
 
     def __init__(self, stats_list):
         self.stats_list = stats_list
@@ -134,6 +136,7 @@ class CpuStats(Stats):
     
     def getUserPercentage(self, previous, current, cpu_id):
         total_delta = self.getTotalDelta(previous, current, cpu_id)
+        if cpu_id not in current.data or cpu_id not in previous.data: return 0.0
         current_user_time = (current.data[cpu_id])['user'] + (current.data[cpu_id])['nice']
         previous_user_time = (previous.data[cpu_id])['user'] + (previous.data[cpu_id])['nice']
         user_delta = current_user_time - previous_user_time
@@ -142,6 +145,7 @@ class CpuStats(Stats):
 
     def getSysPercentage(self, previous, current, cpu_id):
         total_delta = self.getTotalDelta(previous, current, cpu_id)
+        if cpu_id not in current.data or cpu_id not in previous.data: return 0.0
         current_sys_time = (current.data[cpu_id])['system'] + (current.data[cpu_id])['irq'] + (current.data[cpu_id])['softirq']
         previous_sys_time = (previous.data[cpu_id])['system'] + (previous.data[cpu_id])['irq'] + (previous.data[cpu_id])['softirq']
         sys_delta = current_sys_time - previous_sys_time
@@ -151,63 +155,70 @@ class CpuStats(Stats):
     def getCpuCoreCount(self):
         if len(self.stats_list) == 0: return 0
         return len(self.stats_list[0].data) - 1
+    
+    def getStatsCount(self):
+        return len(self.stats_list) - 1
 
             
 class CpuOverallUserSysStats(Stats):
-    
+
+
     def __init__(self, cpu_stats):
         self.cpu_stats = cpu_stats
         
     def __getitem__(self, index):
         previous, current = self.cpu_stats[index]
-        return self.getPercentage(previous, current)
+        return self.__getPercentage(previous, current)
     
-    def getPercentage(self, previous, current):
+    def __getPercentage(self, previous, current):
         res = self.cpu_stats.getUserPercentage(previous, current, 'cpu') + \
               self.cpu_stats.getSysPercentage(previous, current, 'cpu')
         return res
     
     def next(self):
         previous, current = self.cpu_stats.next()
-        return self.getPercentage(previous, current)
+        return self.__getPercentage(previous, current)
 
 
 class CpuOverallUserStats(Stats):
-    
+
+
     def __init__(self, cpu_stats):
         self.cpu_stats = cpu_stats
         
     def __getitem__(self, index):
         previous, current = self.cpu_stats[index]
-        return self.getPercentage(previous, current)
+        return self.__getPercentage(previous, current)
     
-    def getPercentage(self, previous, current):
+    def __getPercentage(self, previous, current):
         return self.cpu_stats.getUserPercentage(previous, current, 'cpu')
     
     def next(self):
         previous, current = self.cpu_stats.next()
-        return self.getPercentage(previous, current)
+        return self.__getPercentage(previous, current)
 
 
 class CpuOverallSysStats(Stats):
+
 
     def __init__(self, cpu_stats):
         self.cpu_stats = cpu_stats
 
     def __getitem__(self, index):
         previous, current = self.cpu_stats[index]
-        return self.getPercentage(previous, current)
+        return self.__getPercentage(previous, current)
 
-    def getPercentage(self, previous, current):
+    def __getPercentage(self, previous, current):
         res = self.cpu_stats.getSysPercentage(previous, current, 'cpu')
         return res
 
     def next(self):
         previous, current = self.cpu_stats.next()
-        return self.getPercentage(previous, current)
+        return self.__getPercentage(previous, current)
 
 
 class CpuPerCoreUserSysStats(Stats):
+
 
     def __init__(self, cpu_stats):
         self.cpu_stats = cpu_stats
@@ -230,6 +241,7 @@ class CpuPerCoreUserSysStats(Stats):
 
 class CpuPerCoreUserStats(Stats):
 
+
     def __init__(self, cpu_stats):
         self.cpu_stats = cpu_stats
 
@@ -250,6 +262,7 @@ class CpuPerCoreUserStats(Stats):
 
 class CpuPerCoreSysStats(Stats):
 
+
     def __init__(self, cpu_stats):
         self.cpu_stats = cpu_stats
 
@@ -269,6 +282,7 @@ class CpuPerCoreSysStats(Stats):
 
 
 class MemStats(Stats):
+
 
     def __init__(self, mem_stats_list):
         self.stats_list = mem_stats_list
@@ -298,6 +312,7 @@ class MemStats(Stats):
 
 class MemUsedStats(Stats):
 
+
     def __init__(self, mem_stats):
         self.mem_stats = mem_stats
     
@@ -318,43 +333,65 @@ class MemUsedStats(Stats):
 
 class Data(object):
 
+
     def parseText(self, text):
         raise NotImplementedError("Subclasses should implement this!")
 
 
 class ProcStatData(Data):
 
+
     def __init__(self, date):
+        """Data format:
+           <cpu_id>    <user>  <nice> <system> <idle>    <iowait> <irq>  <softirq> <steal> <guest> <guest_nice>
+           
+           Example:
+           cpu       74608 2520 24433  1117073 6176   4054 0       0     0     0 
+        """
         self.data = {}
         self.date = date
+        self.end_regexp = re.compile('---- ')
+        self.data_regexp = re.compile(''.join(('(?P<cpu_id>^cpu[0-9]*) +', 
+                                               '(?P<user>[0-9]+) ', 
+                                               '(?P<nice>[0-9]+) ', 
+                                               '(?P<system>[0-9]+) '
+                                               '(?P<idel>[0-9]+) '
+                                               '(?P<iowait>[0-9]+) '
+                                               '(?P<irq>[0-9]+) '
+                                               '(?P<softirq>[0-9]+) '
+                                               '(?P<steal>[0-9]+) '
+                                               '(?P<guest>[0-9]+) '
+                                               '(?P<guest_nice>[0-9]+)')))
 
     def parseText(self, log_file):
-        end_regexp = re.compile('---- ')
         line = log_file.readline()
-        while line and not end_regexp.search(line):
-            if line.startswith('cpu'):
-                items = line.split()
-                cpu_id = items[0]
-                if cpu_id not in self.data: self.data[cpu_id] = {}
-                self.__fillData(self.data[cpu_id], items)
+        while line and not self.end_regexp.search(line):
+            self.__fillData(line)
             line = log_file.readline()
         return line
 
     def getCoreCount(self):
         return len(self.data) - 1
 
-    def __fillData(self, data, items):
-        """ Example
-                 user  nice system idle    iowait irq  softirq steal guest guest_nice  
-             cpu 74608 2520 24433  1117073 6176   4054 0       0     0     0 
-        """
-        data['user'] = int(items[1])
-        data['nice'] = int(items[2])
-        data['system'] = int(items[3])
-        data['idle'] = int(items[4])
-        data['iowait'] = int(items[5])
-        data['irq'] = int(items[6])
-        data['softirq'] = int(items[7])
+    def __fillData(self, text):
+
+        m = self.data_regexp.match(text)
+        if not m: return
+        cpu_id = m.group('cpu_id')
+        user = m.group('user')
+        nice = m.group('nice')
+        system = m.group('system')
+        idle = m.group('idel')
+        iowait = m.group('iowait')
+        irq = m.group('irq')
+        softirq = m.group('softirq')
+        self.data[cpu_id] = {'user': int(user),
+                             'nice': int(nice),
+                             'system': int(system),
+                             'idle': int(idle),
+                             'iowait': int(iowait),
+                             'irq': int(irq),
+                             'softirq': int(softirq)}
 
     def __str__(self):
         res = ''
@@ -368,17 +405,38 @@ class ProcStatData(Data):
 
 class ProcMeminfoData(Data):
 
+
     def __init__(self, date):
+        """Meminfo data format:
+           <key>:           <value> kB
+           .....
+           .....
+           ---- ****
+           Example:
+           
+           MemTotal:        3809032 kB
+           MemFree:          495404 kB
+           MemAvailable:    2133700 kB
+           Buffers:            8140 kB
+           Cached:          1256828 kB
+           SwapCached:        86428 kB
+           ....
+           .....
+           ---- /proc/stat
+        """
         self.data = {}
         self.date = date
+        self.end_regexp = re.compile('---- ')
+        self.data_regexp = re.compile('(?P<key>^[a-zA-Z]+):\s+(?P<value>[0-9]+)\s+kB')
 
     def parseText(self, log_file):
         end_regexp = re.compile('---- ')
         line = log_file.readline()
         while line and not end_regexp.search(line):
-            items = line.split()
-            value_name = (items[0])[:-1]
-            self.data[value_name] = int(items[1])
+            m = self.data_regexp.match(line)
+            if m:
+                value_name = m.group('key')
+                self.data[value_name] = int(m.group('value'))
             line = log_file.readline()
         return line
 
@@ -391,8 +449,10 @@ class ProcMeminfoData(Data):
     def __repr__(self):
         return self.__str__()
 
+
 class LogParser(object):
-    
+
+
     def __init__(self, file_path):
         self.file_path = file_path
         
@@ -422,8 +482,8 @@ class LogParser(object):
         return cpu_stats, mem_stats
     
     def __parseDateText(self, text):
-        text = re.match('(.*)-------- (.*) --------', text).group(2)
-        date = datetime.strptime(text, '%a %b %d %H:%M:%S %Z %Y')
+        date_text = re.match('(.*)-------- (.*) --------', text).group(2)
+        date = datetime.strptime(date_text, '%a %b %d %H:%M:%S %Z %Y')
         return date
 
 
