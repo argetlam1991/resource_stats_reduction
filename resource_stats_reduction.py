@@ -40,45 +40,66 @@ class ResourceUsageStats(object):
 
     def getSummary(self):
 
-        res = 'Overall CPU - user + sys + irq min: {0:.1f}%\n'.format(min(CpuOverallUserSysStats(CpuStats(self.cpu_stats_list))))
-        
-        res += 'Overall CPU - user + sys + irq avg: {0:.1f}%\n'.format(sum(CpuOverallUserSysStats(CpuStats(self.cpu_stats_list))) / \
-                                                                       (CpuStats(self.cpu_stats_list).getStatsCount()))
-        res += 'Overall CPU - user + sys + irq max: {0:.1f}%\n'.format(max(CpuOverallUserSysStats(CpuStats(self.cpu_stats_list))))
-        res += 'Overall CPU - user + sys + irq Max - Min: {0:.1f}%\n'.format(max(CpuOverallUserSysStats(CpuStats(self.cpu_stats_list))) -  \
-                                                                             min(CpuOverallUserSysStats(CpuStats(self.cpu_stats_list))))
-        res += 'Overall CPU - user + sys + irq Last - First: {0:.1f}%\n'.format((CpuOverallUserSysStats(CpuStats(self.cpu_stats_list)))[-1] - \
-                                                                                (CpuOverallUserSysStats(CpuStats(self.cpu_stats_list)))[0])
+        res = 'Overall CPU - user + sys + irq min: {0:.1f}%\n'.format(min(self._getOverallCpuUserSysUsages()))
 
-        res += 'Overall CPU - user min: {0:.1f}%\n'.format(min(CpuOverallUserStats(CpuStats(self.cpu_stats_list))))
-        res += 'Overall CPU - user avg: {0:.1f}%\n'.format(sum(CpuOverallUserStats(CpuStats(self.cpu_stats_list))) / \
-                                                          (CpuStats(self.cpu_stats_list).getStatsCount()))
-        res += 'Overall CPU - user max: {0:.1f}%\n'.format(max(CpuOverallUserStats(CpuStats(self.cpu_stats_list))))
+        res += 'Overall CPU - user + sys + irq avg: {0:.1f}%\n'.format(sum(self._getOverallCpuUserSysUsages()) / \
+                                                                       self._getCpuStatsCount())
+        res += 'Overall CPU - user + sys + irq max: {0:.1f}%\n'.format(max(self._getOverallCpuUserSysUsages()))
+        res += 'Overall CPU - user + sys + irq Max - Min: {0:.1f}%\n'.format(max(self._getOverallCpuUserSysUsages()) -  \
+                                                                             min(self._getOverallCpuUserSysUsages()))
+        res += 'Overall CPU - user + sys + irq Last - First: {0:.1f}%\n'.format((self._getOverallCpuUserSysUsages())[-1] - \
+                                                                                (self._getOverallCpuUserSysUsages())[0])
 
-        res += 'Overall CPU - sys min: {0:.1f}%\n'.format(min(CpuOverallSysStats(CpuStats(self.cpu_stats_list))))
-        res += 'Overall CPU - sys avg: {0:.1f}%\n'.format(sum(CpuOverallSysStats(CpuStats(self.cpu_stats_list))) / \
-                                                          (CpuStats(self.cpu_stats_list).getStatsCount()))
-        res += 'Overall CPU - sys max: {0:.1f}%\n'.format(max(CpuOverallSysStats(CpuStats(self.cpu_stats_list))))
+        res += 'Overall CPU - user min: {0:.1f}%\n'.format(min(self._getOverallCpuUserUsages()))
+        res += 'Overall CPU - user avg: {0:.1f}%\n'.format(sum(self._getOverallCpuUserUsages()) / \
+                                                           self._getCpuStatsCount())
+        res += 'Overall CPU - user max: {0:.1f}%\n'.format(max(self._getOverallCpuUserUsages()))
 
-        res += 'Per CPU - user + sys min: {0:.1f}%\n'.format(min([min(x) for x in CpuPerCoreUserSysStats(CpuStats(self.cpu_stats_list))]))
-        res += 'Per CPU - user + sys max: {0:.1f}%\n'.format(max([max(x) for x in CpuPerCoreUserSysStats(CpuStats(self.cpu_stats_list))]))
+        res += 'Overall CPU - sys min: {0:.1f}%\n'.format(min(self._getOverallCpuSysUsages()))
+        res += 'Overall CPU - sys avg: {0:.1f}%\n'.format(sum(self._getOverallCpuSysUsages()) / \
+                                                          self._getCpuStatsCount())
+        res += 'Overall CPU - sys max: {0:.1f}%\n'.format(max(self._getOverallCpuSysUsages()))
 
-        res += 'Per CPU - user min: {0:.1f}%\n'.format(min([min(x) for x in CpuPerCoreUserStats(CpuStats(self.cpu_stats_list))]))
-        res += 'Per CPU - user max: {0:.1f}%\n'.format(max([max(x) for x in CpuPerCoreUserStats(CpuStats(self.cpu_stats_list))]))
+        res += 'Per CPU - user + sys min: {0:.1f}%\n'.format(min([min(x) for x in self._getPerCoreUserSysStats()]))
+        res += 'Per CPU - user + sys max: {0:.1f}%\n'.format(max([max(x) for x in self._getPerCoreUserSysStats()]))
 
-        res += 'Per CPU - sys min: {0:.1f}%\n'.format(min([min(x) for x in CpuPerCoreSysStats(CpuStats(self.cpu_stats_list))]))
-        res += 'Per CPU - sys max: {0:.1f}%\n'.format(max([max(x) for x in CpuPerCoreSysStats(CpuStats(self.cpu_stats_list))]))
+        res += 'Per CPU - user min: {0:.1f}%\n'.format(min([min(x) for x in self._getPerCoreUserSysStats()]))
+        res += 'Per CPU - user max: {0:.1f}%\n'.format(max([max(x) for x in self._getPerCoreUserSysStats()]))
 
-        res += 'Memory in use (MiB) min: {0:.1f}\n'.format(min(MemUsedStats(MemStats(self.mem_stats_list))) / 1024)
-        res += 'Memory in use (MiB) avg: {0:.1f}\n'.format((sum(MemUsedStats(MemStats(self.mem_stats_list))) / 1024) /
-                                                     len(self.mem_stats_list))
-        res += 'Memory in use (MiB) max: {0:.1f}\n'.format(max(MemUsedStats(MemStats(self.mem_stats_list))) / 1024)
+        res += 'Per CPU - sys min: {0:.1f}%\n'.format(min([min(x) for x in self._getPerCoreUserSysStats()]))
+        res += 'Per CPU - sys max: {0:.1f}%\n'.format(max([max(x) for x in self._getPerCoreUserSysStats()]))
 
-        res += 'Memory in use (MiB) Max - Min : {0:.1f}\n'.format((max(MemUsedStats(MemStats(self.mem_stats_list))) - \
-                                                         min(MemUsedStats(MemStats(self.mem_stats_list))))  / 1024)
-        res += 'Memory in use (MiB) Last - First: {0:.1f}'.format(((MemUsedStats(MemStats(self.mem_stats_list)))[-1] - \
-                                                                   (MemUsedStats(MemStats(self.mem_stats_list)))[0]) / 1024)
+        res += 'Memory in use (MiB) min: {0:.1f}\n'.format(min(self._getMemUsedStats()) / 1024)
+        res += 'Memory in use (MiB) avg: {0:.1f}\n'.format((sum(self._getMemUsedStats()) / 1024) /
+                                                           self._getMemStatsCount())
+        res += 'Memory in use (MiB) max: {0:.1f}\n'.format(max(self._getMemUsedStats()) / 1024)
+
+        res += 'Memory in use (MiB) Max - Min : {0:.1f}\n'.format((max(self._getMemUsedStats()) - \
+                                                         min(self._getMemUsedStats()))  / 1024)
+        res += 'Memory in use (MiB) Last - First: {0:.1f}'.format(((self._getMemUsedStats())[-1] - \
+                                                                   (self._getMemUsedStats())[0]) / 1024)
         return res
+
+    def _getOverallCpuUserSysUsages(self):
+        return CpuOverallUserSysStats(CpuStats(self.cpu_stats_list))
+
+    def _getCpuStatsCount(self):
+        return len(self.cpu_stats_list) - 1
+
+    def _getOverallCpuUserUsages(self):
+        return CpuOverallUserStats(CpuStats(self.cpu_stats_list))
+
+    def _getOverallCpuSysUsages(self):
+        return CpuOverallSysStats(CpuStats(self.cpu_stats_list))
+
+    def _getPerCoreUserSysStats(self):
+        return CpuPerCoreUserSysStats(CpuStats(self.cpu_stats_list))
+
+    def _getMemUsedStats(self):
+        return MemUsedStats(MemStats(self.mem_stats_list))
+
+    def _getMemStatsCount(self):
+        return len(self.mem_stats_list)
 
 
 class Stats(object):
@@ -117,10 +138,10 @@ class CpuStats(Stats):
         if self.index >= len(self.stats_list) - 1:
             raise StopIteration()
         res = self.__getitem__(self.index)
-        self.__shiftOneStat()
+        self._shiftOneStat()
         return res
 
-    def __shiftOneStat(self):
+    def _shiftOneStat(self):
         self.pre_stat = self.current_stat
         self.index += 1
         if self.index >= len(self.stats_list): 
@@ -168,16 +189,16 @@ class CpuOverallUserSysStats(Stats):
         
     def __getitem__(self, index):
         previous, current = self.cpu_stats[index]
-        return self.__getPercentage(previous, current)
+        return self._getPercentage(previous, current)
     
-    def __getPercentage(self, previous, current):
+    def _getPercentage(self, previous, current):
         res = self.cpu_stats.getUserPercentage(previous, current, 'cpu') + \
               self.cpu_stats.getSysPercentage(previous, current, 'cpu')
         return res
     
     def next(self):
         previous, current = self.cpu_stats.next()
-        return self.__getPercentage(previous, current)
+        return self._getPercentage(previous, current)
 
 
 class CpuOverallUserStats(Stats):
@@ -188,14 +209,14 @@ class CpuOverallUserStats(Stats):
         
     def __getitem__(self, index):
         previous, current = self.cpu_stats[index]
-        return self.__getPercentage(previous, current)
+        return self._getPercentage(previous, current)
     
-    def __getPercentage(self, previous, current):
+    def _getPercentage(self, previous, current):
         return self.cpu_stats.getUserPercentage(previous, current, 'cpu')
     
     def next(self):
         previous, current = self.cpu_stats.next()
-        return self.__getPercentage(previous, current)
+        return self._getPercentage(previous, current)
 
 
 class CpuOverallSysStats(Stats):
@@ -206,15 +227,15 @@ class CpuOverallSysStats(Stats):
 
     def __getitem__(self, index):
         previous, current = self.cpu_stats[index]
-        return self.__getPercentage(previous, current)
+        return self._getPercentage(previous, current)
 
-    def __getPercentage(self, previous, current):
+    def _getPercentage(self, previous, current):
         res = self.cpu_stats.getSysPercentage(previous, current, 'cpu')
         return res
 
     def next(self):
         previous, current = self.cpu_stats.next()
-        return self.__getPercentage(previous, current)
+        return self._getPercentage(previous, current)
 
 
 class CpuPerCoreUserSysStats(Stats):
@@ -299,10 +320,10 @@ class MemStats(Stats):
         if self.index >= len(self.stats_list):
             raise StopIteration()
         res = self.__getitem__(self.index)
-        self.__shiftOneStat()
+        self._shiftOneStat()
         return res 
 
-    def __shiftOneStat(self):
+    def _shiftOneStat(self):
         self.index += 1
         if self.index >= len(self.stats_list): 
             self.current_stat = None
@@ -342,56 +363,46 @@ class ProcStatData(Data):
 
 
     def __init__(self, date):
+
+        self.data = {}
+        self.date = date
+
+    def parseText(self, log_file):
         """Data format:
            <cpu_id>    <user>  <nice> <system> <idle>    <iowait> <irq>  <softirq> <steal> <guest> <guest_nice>
            
            Example:
            cpu       74608 2520 24433  1117073 6176   4054 0       0     0     0 
         """
-        self.data = {}
-        self.date = date
-        self.end_regexp = re.compile('---- ')
-        self.data_regexp = re.compile(''.join(('(?P<cpu_id>^cpu[0-9]*) +', 
+        end_regexp = re.compile('---- ')
+        data_regexp = re.compile(''.join(('(?P<cpu_id>^cpu[0-9]*) +', 
                                                '(?P<user>[0-9]+) ', 
                                                '(?P<nice>[0-9]+) ', 
                                                '(?P<system>[0-9]+) '
-                                               '(?P<idel>[0-9]+) '
+                                               '(?P<idle>[0-9]+) '
                                                '(?P<iowait>[0-9]+) '
                                                '(?P<irq>[0-9]+) '
                                                '(?P<softirq>[0-9]+) '
                                                '(?P<steal>[0-9]+) '
                                                '(?P<guest>[0-9]+) '
                                                '(?P<guest_nice>[0-9]+)')))
-
-    def parseText(self, log_file):
         line = log_file.readline()
-        while line and not self.end_regexp.search(line):
-            self.__fillData(line)
+        while line and not end_regexp.search(line):
+            m = data_regexp.match(line)
+            if m:
+                cpu_id = m.group('cpu_id')
+                self.data[cpu_id] = {'user': int(m.group('user')),
+                                     'nice': int(m.group('nice')),
+                                     'system': int(m.group('system')),
+                                     'idle': int(m.group('idle')),
+                                     'iowait': int(m.group('iowait')),
+                                     'irq': int(m.group('irq')),
+                                     'softirq': int(m.group('softirq'))}
             line = log_file.readline()
         return line
 
     def getCoreCount(self):
         return len(self.data) - 1
-
-    def __fillData(self, text):
-
-        m = self.data_regexp.match(text)
-        if not m: return
-        cpu_id = m.group('cpu_id')
-        user = m.group('user')
-        nice = m.group('nice')
-        system = m.group('system')
-        idle = m.group('idel')
-        iowait = m.group('iowait')
-        irq = m.group('irq')
-        softirq = m.group('softirq')
-        self.data[cpu_id] = {'user': int(user),
-                             'nice': int(nice),
-                             'system': int(system),
-                             'idle': int(idle),
-                             'iowait': int(iowait),
-                             'irq': int(irq),
-                             'softirq': int(softirq)}
 
     def __str__(self):
         res = ''
@@ -407,6 +418,11 @@ class ProcMeminfoData(Data):
 
 
     def __init__(self, date):
+
+        self.data = {}
+        self.date = date
+
+    def parseText(self, log_file):
         """Meminfo data format:
            <key>:           <value> kB
            .....
@@ -424,16 +440,12 @@ class ProcMeminfoData(Data):
            .....
            ---- /proc/stat
         """
-        self.data = {}
-        self.date = date
-        self.end_regexp = re.compile('---- ')
-        self.data_regexp = re.compile('(?P<key>^[a-zA-Z]+):\s+(?P<value>[0-9]+)\s+kB')
 
-    def parseText(self, log_file):
         end_regexp = re.compile('---- ')
+        data_regexp = re.compile('(?P<key>^[a-zA-Z]+):\s+(?P<value>[0-9]+)\s+kB')
         line = log_file.readline()
         while line and not end_regexp.search(line):
-            m = self.data_regexp.match(line)
+            m = data_regexp.match(line)
             if m:
                 value_name = m.group('key')
                 self.data[value_name] = int(m.group('value'))
@@ -455,7 +467,7 @@ class LogParser(object):
 
     def __init__(self, file_path):
         self.file_path = file_path
-        
+
     def parseLogFile(self):
         date_regexp = re.compile('^-------- [a-zA-Z]{3,} [a-zA-Z]{3,} [0-9]{1,2} [0-9]{2,}:[0-9]{2,}:[0-9]{2,} GMT [0-9]{4,} --------')
         proc_stat_start_regexp = re.compile('^---- /proc/stat')
@@ -480,7 +492,7 @@ class LogParser(object):
             else:
                 line = f.readline()
         return cpu_stats, mem_stats
-    
+
     def __parseDateText(self, text):
         date_text = re.match('(.*)-------- (.*) --------', text).group(2)
         date = datetime.strptime(date_text, '%a %b %d %H:%M:%S %Z %Y')
