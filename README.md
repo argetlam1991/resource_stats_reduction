@@ -12,7 +12,7 @@ usage:
 python resource_data_collection.py <output_data_path>
 
 sample of output_data:
-================================================================
+--------------------------------------------------------------
 -------- Mon Apr 30 20:09:19 GMT 2018 --------
 ---- /proc/meminfo
 MemTotal:        5876336 kB
@@ -42,14 +42,14 @@ User 2 + Nice 0 + Sys 8 + Idle 37 + IOW 0 + IRQ 0 + SIRQ 0 = 47
     5 root      0 -20   0% S     1      0K      0K  fg kworker/0:0H
     7 root     20   0   0% S     1      0K      0K  fg rcu_preempt
     8 root     20   0   0% S     1      0K      0K  fg rcu_sched
-==============================================================
+--------------------------------------------------------------
 
 resource_stats_reduction.py is used to parse data collected by resource_data_collection.py.
 
 usage: python resource_stats_reduction.py <data_file>
 
 sample of output:
-==============================================================
+--------------------------------------------------------------
 Overall CPU - user + sys + irq min: 0.9%
 Overall CPU - user + sys + irq avg: 3.5%
 Overall CPU - user + sys + irq max: 18.1%
@@ -72,4 +72,4 @@ Memory in use (MiB) avg: 2482.0
 Memory in use (MiB) max: 2498.2
 Memory in use (MiB) Max - Min : 23.0
 Memory in use (MiB) Last - First: -0.9
-==============================================================
+--------------------------------------------------------------
