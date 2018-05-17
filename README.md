@@ -9,8 +9,8 @@ resource_stats_reduction contains Two python scripts:
 resource_data_collection.py is used to read system file on android device and generate a data file based on android device system file info.
 To be able to run it, you need to install adb first and make sure that there is only one android device is connecting to your workstation.
 
-usage: python resource_data_collection.py <output_data_path>
-
+usage: usage: resource_stats_reduction.py [-h] [--input_file INPUT_FILE]
+                                   [--start START] [--end END] [--export_csv]
 
 
 

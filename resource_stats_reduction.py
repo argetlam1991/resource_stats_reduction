@@ -29,6 +29,7 @@ from __future__ import division
 import re
 import argparse
 from datetime import datetime
+from __builtin__ import int
 
 
 class ResourceUsageStats(object):
@@ -37,10 +38,34 @@ class ResourceUsageStats(object):
     def __init__(self, cpu_stats_list, mem_stats_list):
         self.cpu_stats_list = cpu_stats_list
         self.mem_stats_list = mem_stats_list
+        
+    def exportCSV(self):
+        file_path = 'stats_%s.csv' % datetime.now().strftime('%y_%m_%d-%H_%M_%S')
+        cpu_count = self._getCpuCoreCount()
+        with open (file_path, 'w') as f:
+            #write titles to csv
+            titles = 'time,overall cpu'
+            for i in xrange(cpu_count):
+                titles += ',' + 'cpu' + str(i)
+            titles += ',mem\n'
+            f.write(titles)
+            #fill data to csv
+            overall_cpu_user_sys_usages = self._getOverallCpuUserSysUsages()
+            per_core_user_sys_stats = self._getPerCoreUserSysStats()
+            mem_used_stats = self._getMemUsedStats()
+            for i in xrange(self._getCpuStatsCount()):
+                date = cpu_stats_list[i+1].date.strftime('%y/%m/%d-%H:%M:%S')
+                output = str(date)
+                output += ',' + str(overall_cpu_user_sys_usages[i])
+                for j in xrange(cpu_count):
+                    output += ',' + str(per_core_user_sys_stats[i][j])
+                output += ',' + str(mem_used_stats[i+1])
+                f.write(output + '\n')
+            
 
-    def getSummary(self):
-
-        res = 'Overall CPU - user + sys + irq min: {0:.1f}%\n'.format(min(self._getOverallCpuUserSysUsages()))
+    def getSummary(self, start, end):
+        res = 'Stats Rang: From {0}s to {1}s\n'.format(start, end)
+        res += 'Overall CPU - user + sys + irq min: {0:.1f}%\n'.format(min(self._getOverallCpuUserSysUsages()))
 
         res += 'Overall CPU - user + sys + irq avg: {0:.1f}%\n'.format(sum(self._getOverallCpuUserSysUsages()) / \
                                                                        self._getCpuStatsCount())
@@ -79,6 +104,10 @@ class ResourceUsageStats(object):
         res += 'Memory in use (MiB) Last - First: {0:.1f}'.format(((self._getMemUsedStats())[-1] - \
                                                                    (self._getMemUsedStats())[0]) / 1024)
         return res
+    
+    def _getCpuCoreCount(self):
+        cpu_stats = CpuStats(self.cpu_stats_list)
+        return cpu_stats.getCpuCoreCount()
 
     def _getOverallCpuUserSysUsages(self):
         return CpuOverallUserSysStats(CpuStats(self.cpu_stats_list))
@@ -468,10 +497,12 @@ class LogParser(object):
     def __init__(self, file_path):
         self.file_path = file_path
 
-    def parseLogFile(self):
+    def parseLogFile(self, start=0, end=-1):
+        if start < 0: start = 0
         date_regexp = re.compile('^-------- [a-zA-Z]{3,} [a-zA-Z]{3,} [0-9]{1,2} [0-9]{2,}:[0-9]{2,}:[0-9]{2,} GMT [0-9]{4,} --------')
         proc_stat_start_regexp = re.compile('^---- /proc/stat')
         proc_meminfo_start_regexp = re.compile('^---- /proc/meminfo')
+        start_date = None
         current_date = None
         cpu_stats = []
         mem_stats = []
@@ -480,15 +511,20 @@ class LogParser(object):
         while line:
             if date_regexp.search(line):
                 current_date = self.__parseDateText(line)
+                if not start_date: start_date = current_date
                 line = f.readline()
             elif proc_stat_start_regexp.search(line):
                 proc_stat_data = ProcStatData(current_date)
                 line = proc_stat_data.parseText(f)
-                cpu_stats.append(proc_stat_data)
+                delta = (current_date - start_date).seconds
+                if end < 0 or (delta >= start and delta < end):
+                    cpu_stats.append(proc_stat_data)
             elif proc_meminfo_start_regexp.search(line):
                 proc_meminfo_data = ProcMeminfoData(current_date)
                 line = proc_meminfo_data.parseText(f)
-                mem_stats.append(proc_meminfo_data)
+                delta = (current_date - start_date).seconds
+                if end < 0 or (delta >= start and delta < end):
+                    mem_stats.append(proc_meminfo_data)
             else:
                 line = f.readline()
         return cpu_stats, mem_stats
@@ -506,10 +542,17 @@ if __name__ == '__main__':
                            /proc/stat and /proc/meminfo
                          """
     args_parser = argparse.ArgumentParser(description=script_description)
-    args_parser.add_argument('input_file', type=str, help='input log file')
+    args_parser.add_argument('--input_file', type=str, help='input log file')
+    args_parser.add_argument('--start', type=int, default=0, help='start timestamp, start from 0s')
+    args_parser.add_argument('--end', type=int, default=-1, help='end timestamp')
+    args_parser.add_argument('--export_csv', action='store_true', help='whether to export data as csv')
     args = args_parser.parse_args()
     log_parser = LogParser(args.input_file)
-    cpu_stats_list, mem_stats_list = log_parser.parseLogFile()
+    cpu_stats_list, mem_stats_list = log_parser.parseLogFile(args.start, args.end)
+    if len(cpu_stats_list) < 2 or len(mem_stats_list) < 1:
+        raise Exception('Not enough data for calculation')
     resource_usage_stats = ResourceUsageStats(cpu_stats_list, mem_stats_list)
-    res = resource_usage_stats.getSummary()
+    if args.export_csv:
+        resource_usage_stats.exportCSV()
+    res = resource_usage_stats.getSummary(args.start, args.end)
     print (res)
