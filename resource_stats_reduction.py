@@ -505,7 +505,7 @@ class LogParser(object):
 
     def parseLogFile(self, start=0, end=-1):
         if start < 0: start = 0
-        date_regexp = re.compile('^-------- [a-zA-Z]{3,} [a-zA-Z]{3,} [0-9]{1,2} [0-9]{2,}:[0-9]{2,}:[0-9]{2,} GMT [0-9]{4,} --------')
+        date_regexp = re.compile('^--------\s+[a-zA-Z]{3,}\s+[a-zA-Z]{3,}\s+[0-9]{1,2}\s+[0-9]{2,}:[0-9]{2,}:[0-9]{2,}\s+GMT\s+[0-9]{4,}\s+--------')
         proc_stat_start_regexp = re.compile('^---- /proc/stat')
         proc_meminfo_start_regexp = re.compile('^---- /proc/meminfo')
         start_date = None
@@ -537,7 +537,7 @@ class LogParser(object):
 
     def __parseDateText(self, text):
         date_text = re.match('(.*)-------- (.*) --------', text).group(2)
-        date = datetime.strptime(date_text, '%a %b %d %H:%M:%S %Z %Y')
+        date = datetime.strptime(re.sub('\s+', ' ', date_text), '%a %b %d %H:%M:%S %Z %Y')
         return date
 
 
